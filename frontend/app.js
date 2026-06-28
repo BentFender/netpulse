@@ -65,6 +65,7 @@ async function refreshStatus() {
       el("curServer").textContent = "Speedtest failed";
       el("curServerSub").textContent = sp.error ? sp.error.slice(0, 60) : "";
       el("lastSpeedTime").textContent = relTime(sp.ts);
+
       el("downloadBar").style.width = "0%";
       el("uploadBar").style.width = "0%";
       el("pingBar").style.width = "0%";
@@ -119,7 +120,6 @@ async function refreshHeatmap() {
     heatmap.innerHTML = "";
 
     const points = data.points;
-
     if (points.length === 0) {
       heatmap.innerHTML = `<div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary);">No checks recorded yet — the monitor just started.</div>`;
       return;
@@ -299,8 +299,8 @@ function drawLineChart(svg, series, opts) {
     minTs = dataMinTs - overheadMs;
     maxTs = dataMaxTs + overheadMs;
   }
-  const tsSpan = Math.max(maxTs - minTs, 1);
 
+  const tsSpan = Math.max(maxTs - minTs, 1);
   const xForTs = (ts) => padding.left + ((ts - minTs) / tsSpan) * plotW;
 
   // gridlines + y-axis labels
@@ -308,6 +308,7 @@ function drawLineChart(svg, series, opts) {
   for (let i = 0; i <= gridCount; i++) {
     const y = padding.top + (plotH / gridCount) * i;
     const val = maxVal - (maxVal / gridCount) * i;
+
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
     line.setAttribute("x1", padding.left);
     line.setAttribute("x2", width - padding.right);
@@ -360,7 +361,7 @@ function drawLineChart(svg, series, opts) {
     svg.appendChild(label);
   }
 
-  for (const s of series) {
+  for (const [seriesIndex, s] of series.entries()) {
     const n = s.points.length;
     if (n === 0) continue;
 
@@ -406,18 +407,22 @@ function drawLineChart(svg, series, opts) {
       svg.appendChild(dot);
     }
 
-    // Average value label, left side of the chart, stacked per series
-    // so multiple lines (e.g. Download/Upload) don't overlap.
+    // Average value label. Stacked as a fixed block in the top-left
+    // corner (one line per series, in series order — Download first,
+    // then Upload) instead of being placed at each series' own data
+    // height. Placing labels at their data height is what caused the
+    // Download/Upload avg labels to land on top of each other whenever
+    // their values were close together (e.g. ~350 vs ~250 on a chart
+    // scaled well above both).
     const avg = seriesAverage(s.points);
     if (avg !== null) {
-      const avgY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
       const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
       avgLabel.setAttribute("x", padding.left + 6);
-      avgLabel.setAttribute("y", Math.max(padding.top + 10, Math.min(avgY - 4, height - padding.bottom - 4)));
+      avgLabel.setAttribute("y", padding.top + 12 + seriesIndex * 13);
       avgLabel.setAttribute("font-size", "10");
       avgLabel.setAttribute("font-weight", "600");
       avgLabel.setAttribute("fill", s.color);
-      avgLabel.textContent = `avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
+      avgLabel.textContent = `${s.label} avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
       svg.appendChild(avgLabel);
     }
 
@@ -474,6 +479,7 @@ async function refreshSpeedChart() {
   try {
     const data = await fetchJSON(`/api/speedhistory?hours=${currentSpeedHours}`);
     const svg = el("speedChart");
+
     const downloadSeries = {
       label: "Download",
       color: "var(--signal-blue)".trim(),
@@ -484,8 +490,10 @@ async function refreshSpeedChart() {
       color: "#4ECB8F",
       points: data.points.map((p) => ({ ts: p.ts, value: p.up ? p.upload_mbps : null })),
     };
+
     // resolve CSS var manually since SVG attrs don't resolve var() reliably across all contexts
     downloadSeries.color = "#5B9DFF";
+
     drawLineChart(svg, [downloadSeries, uploadSeries], { height: 320, rangeHours: currentSpeedHours });
   } catch (e) {
     console.error("speed chart refresh failed", e);
@@ -496,11 +504,13 @@ async function refreshLatencyChart() {
   try {
     const data = await fetchJSON(`/api/uptime?hours=${currentLatHours}&max_points=400`);
     const svg = el("latencyChart");
+
     const series = {
       label: "Latency",
       color: "#F0A23A",
       points: data.points.map((p) => ({ ts: p.ts, value: p.up ? p.latency_ms : null })),
     };
+
     drawLineChart(svg, [series], { height: 240, rangeHours: currentLatHours });
   } catch (e) {
     console.error("latency chart refresh failed", e);
@@ -541,7 +551,6 @@ el("runNowBtn").addEventListener("click", async () => {
 
   try {
     const resp = await fetchJSON("/api/run-speedtest-now", { method: "POST" });
-
     if (!resp.started) {
       btn.lastChild.textContent = " Already running…";
       setTimeout(() => {
