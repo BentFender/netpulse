@@ -361,7 +361,39 @@ function drawLineChart(svg, series, opts) {
     svg.appendChild(label);
   }
 
-  for (const [seriesIndex, s] of series.entries()) {
+  // Average label rows are computed for every series up front (before any
+  // drawing) so we know all their natural y-positions at once. That lets us
+  // detect collisions between series (e.g. Download/Upload averages sitting
+  // close together) and resolve them by nudging the labels apart vertically,
+  // while keeping them anchored near their real height on the chart instead
+  // of relocating them to a fixed corner.
+  const avgRows = [];
+  for (const s of series) {
+    const avg = seriesAverage(s.points);
+    if (avg === null) continue;
+    const avgY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
+    avgRows.push({ series: s, avg, y: avgY });
+  }
+  avgRows.sort((a, b) => a.y - b.y);
+
+  const MIN_LABEL_GAP_PX = 13; // smallest vertical gap that keeps stacked labels readable
+  for (let i = 1; i < avgRows.length; i++) {
+    const prev = avgRows[i - 1];
+    const cur = avgRows[i];
+    const gap = cur.y - prev.y;
+    if (gap < MIN_LABEL_GAP_PX) {
+      const push = (MIN_LABEL_GAP_PX - gap) / 2;
+      prev.y -= push;
+      cur.y += push;
+    }
+  }
+  // Keep everything inside the plot area after nudging.
+  for (const row of avgRows) {
+    row.y = Math.max(padding.top + 10, Math.min(row.y, height - padding.bottom - 4));
+  }
+  const avgYById = new Map(avgRows.map((row) => [row.series, row.y]));
+
+  for (const s of series) {
     const n = s.points.length;
     if (n === 0) continue;
 
@@ -407,22 +439,20 @@ function drawLineChart(svg, series, opts) {
       svg.appendChild(dot);
     }
 
-    // Average value label. Stacked as a fixed block in the top-left
-    // corner (one line per series, in series order — Download first,
-    // then Upload) instead of being placed at each series' own data
-    // height. Placing labels at their data height is what caused the
-    // Download/Upload avg labels to land on top of each other whenever
-    // their values were close together (e.g. ~350 vs ~250 on a chart
-    // scaled well above both).
+    // Average value label, placed at (or very near) this series' own
+    // average height — same row as where its average line actually sits.
+    // When two series' averages are close enough that their labels would
+    // overlap, both get nudged apart symmetrically (computed above) so
+    // they stay readable without losing their connection to the data.
     const avg = seriesAverage(s.points);
     if (avg !== null) {
       const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
       avgLabel.setAttribute("x", padding.left + 6);
-      avgLabel.setAttribute("y", padding.top + 12 + seriesIndex * 13);
+      avgLabel.setAttribute("y", avgYById.get(s).toFixed(2));
       avgLabel.setAttribute("font-size", "10");
       avgLabel.setAttribute("font-weight", "600");
       avgLabel.setAttribute("fill", s.color);
-      avgLabel.textContent = `${s.label} avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
+      avgLabel.textContent = `avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
       svg.appendChild(avgLabel);
     }
 
