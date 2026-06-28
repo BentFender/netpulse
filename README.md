@@ -15,31 +15,33 @@ actually reflect on — not just a live number that resets every refresh.
 
 ## Deploying on ZimaOS
 
-### Option A — ZimaOS App Store / Compose UI (recommended)
+ZimaOS App Store / Compose UI (recommended)
+Install a customized app/ Import (top right corner)
+Paste docker compose lines in the top field, change hostname: "192.168.50.227" to your ZimaOS server address and click "Submit"
 
-1. Copy this whole `netmon` folder onto your ZimaOS box (e.g. via the Files app, a
-   network share, or `scp`) — put it somewhere like `/DATA/AppData/netpulse/`.
-2. In ZimaOS, open the **Apps / Docker Compose** install screen and point it at
-   `docker-compose.yml` inside that folder (or paste its contents in).
-3. Deploy. The first build takes a minute or two (installing `speedtest-cli`).
-4. Open `http://<your-zimaos-ip>:8077` in a browser.
+services:
+  netpulse:
+    image: ghcr.io/bentfender/netpulse:latest
+    container_name: netpulse
+    restart: unless-stopped
+    network_mode: host   # most reliable for accurate speedtests / pings; see README for bridge-mode alternative
+    volumes:
+      - /DATA/AppData/netpulse/data:/data
+    environment:
+      - SPEEDTEST_INTERVAL_MIN=10   # how often to run a full speedtest
+      - PING_INTERVAL_SEC=60        # how often to ping for uptime
+      - PING_HOST=1.1.1.1           # host to ping for uptime checks
 
-The default `docker-compose.yml` uses `network_mode: host`, which is the most
-reliable option for accurate ping/speedtest results and needs no port mapping.
-If your ZimaOS setup doesn't like host networking (some app-store UIs prefer
-explicit ports), use **`docker-compose.bridge.yml`** instead — it maps port
-`8077:8077` explicitly.
-
-### Option B — SSH / command line
-
-```bash
-# on the ZimaOS server, after copying this folder over
-cd netmon
-docker compose up -d --build
-
-# or, for bridge networking instead of host networking:
-docker compose -f docker-compose.bridge.yml up -d --build
-```
+x-casaos:
+  hostname: "192.168.50.227"
+  scheme: http
+  index: /
+  port_map: "8077"
+  author: self
+  category: self
+  icon: ""
+  title:
+    custom: "netpulse"
 
 Check it's running:
 
