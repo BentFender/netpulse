@@ -26,7 +26,7 @@ local build step needed.
 
 ### Option A — ZimaOS App Store / Compose UI (recommended)
 
-1. In ZimaOS, choose **Install a customized app** - **+** simbol on Apps dashboard.
+1. In ZimaOS, choose **Install a customized app** - The **+** simbol on Apps dashboard.
    **Import** — a button with arrow in the top-right corner of the popup settings window.
 2. Paste the following into the compose field, **replacing the hostname**
    `192.168.50.227` with your own ZimaOS server's IP address:
