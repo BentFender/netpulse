@@ -8,7 +8,6 @@
   --text-primary: #E4E7ED;
   --text-secondary: #8A90A0;
   --text-tertiary: #5A5F6E;
-
   --signal-blue: #5B9DFF;
   --signal-blue-dim: #3D6CB0;
   --up-green: #4ECB8F;
@@ -16,7 +15,6 @@
   --warn-amber: #F0A23A;
   --down-red: #E25C5C;
   --down-red-dim: #5C3434;
-
   --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
   --font-sans: 'Inter', -apple-system, sans-serif;
 }
@@ -62,15 +60,18 @@ body {
   align-items: center;
   gap: 10px;
 }
+
 .brand-mark {
   color: var(--signal-blue);
   font-size: 18px;
   animation: pulse-mark 3s ease-in-out infinite;
 }
+
 @keyframes pulse-mark {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+
 .brand-name {
   font-family: var(--font-mono);
   font-weight: 700;
@@ -99,16 +100,20 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
 }
+
 .status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--text-tertiary);
 }
+
 .status-pill--up .status-dot { background: var(--up-green); box-shadow: 0 0 8px var(--up-green); }
 .status-pill--up { color: var(--up-green); border-color: var(--up-green-dim); }
+
 .status-pill--down .status-dot { background: var(--down-red); box-shadow: 0 0 8px var(--down-red); }
 .status-pill--down { color: var(--down-red); border-color: var(--down-red-dim); }
+
 .status-pill--loading .status-dot { animation: blink 1.2s ease-in-out infinite; }
 @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
@@ -130,6 +135,7 @@ body {
 }
 
 /* ---------------- Hero ---------------- */
+
 .hero {
   background: linear-gradient(135deg, var(--surface) 0%, var(--surface-raised) 100%);
   border: 1px solid var(--border);
@@ -149,6 +155,7 @@ body {
   letter-spacing: 0.08em;
   margin-bottom: 8px;
 }
+
 .hero-stat__value {
   font-family: var(--font-mono);
   font-size: 64px;
@@ -157,11 +164,13 @@ body {
   color: var(--signal-blue);
   letter-spacing: -0.02em;
 }
+
 .hero-stat__value .unit {
   font-size: 28px;
   color: var(--text-secondary);
   margin-left: 2px;
 }
+
 .hero-stat__sub {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -180,22 +189,26 @@ body {
   flex-direction: column;
   gap: 10px;
 }
+
 .hero-secondary__row {
   display: flex;
   justify-content: space-between;
   gap: 24px;
   min-width: 180px;
 }
+
 .hero-secondary__label {
   font-size: 13px;
   color: var(--text-secondary);
 }
+
 .hero-secondary__value {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
+
 .hero-secondary__value--small {
   font-size: 12px;
   color: var(--text-secondary);
@@ -218,29 +231,36 @@ body {
   transition: filter 0.15s ease, transform 0.1s ease;
   white-space: nowrap;
 }
+
 .btn-run:hover { filter: brightness(1.1); }
 .btn-run:active { transform: scale(0.97); }
 .btn-run:disabled { opacity: 0.5; cursor: default; }
+
 .btn-run__icon {
   display: inline-block;
 }
+
 .btn-run__icon--spinning {
   animation: spin 0.9s linear infinite;
 }
+
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ---------------- Metric row ---------------- */
+
 .metric-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
+
 .metric-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px 22px;
 }
+
 .metric-card__label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -249,12 +269,14 @@ body {
   color: var(--text-tertiary);
   margin-bottom: 10px;
 }
+
 .metric-card__value {
   font-family: var(--font-mono);
   font-size: 28px;
   font-weight: 600;
   color: var(--text-primary);
 }
+
 .metric-card__value--text {
   font-size: 14px;
   font-weight: 500;
@@ -264,17 +286,20 @@ body {
   text-overflow: ellipsis;
   display: block;
 }
+
 .metric-card__unit {
   font-size: 13px;
   color: var(--text-tertiary);
   margin-left: 4px;
 }
+
 .metric-card__sub {
   font-size: 11px;
   color: var(--text-tertiary);
   margin-top: 10px;
   font-family: var(--font-mono);
 }
+
 .metric-card__bar {
   margin-top: 14px;
   height: 4px;
@@ -282,23 +307,27 @@ body {
   border-radius: 2px;
   overflow: hidden;
 }
+
 .metric-card__bar-fill {
   height: 100%;
   border-radius: 2px;
   width: 0%;
   transition: width 0.5s ease;
 }
+
 .metric-card__bar-fill--download { background: var(--signal-blue); }
 .metric-card__bar-fill--upload { background: var(--up-green); }
 .metric-card__bar-fill--ping { background: var(--warn-amber); }
 
 /* ---------------- Panels ---------------- */
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 28px 32px;
 }
+
 .panel__header {
   display: flex;
   justify-content: space-between;
@@ -307,11 +336,13 @@ body {
   flex-wrap: wrap;
   gap: 12px;
 }
+
 .panel__title {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+
 .panel__hint {
   font-size: 12px;
   color: var(--text-tertiary);
@@ -326,6 +357,7 @@ body {
   border-radius: 8px;
   padding: 3px;
 }
+
 .range-btn {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -337,28 +369,69 @@ body {
   padding: 6px 14px;
   cursor: pointer;
 }
+
 .range-btn--active {
   background: var(--surface-raised);
   color: var(--signal-blue);
 }
 
 /* ---------------- Heatmap ---------------- */
+
 .heatmap-wrap {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
+
+/* One row per calendar day: a fixed-width date label on the left, then
+   that day's connectivity-check cells on the right. Rows stack vertically
+   so the grid always reads as "7 days, one line each" regardless of how
+   many checks happened to land in a given day or how wide the window is —
+   unlike a single auto-wrapping grid, where row length (and therefore
+   which day starts where) depended entirely on viewport width. */
 .heatmap {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 11px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.heatmap-day {
+  display: flex;
+  flex-direction: column;
   gap: 3px;
 }
+
+.heatmap-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.heatmap-row__label {
+  flex: 0 0 auto;
+  width: 92px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.heatmap-row__cells {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+}
+
 .heatmap-cell {
   width: 11px;
   height: 11px;
   border-radius: 2px;
   background: var(--border);
+  flex: 0 0 auto;
 }
+
 .heatmap-cell--up { background: var(--up-green); }
 .heatmap-cell--slow { background: var(--warn-amber); }
 .heatmap-cell--down { background: var(--down-red); }
@@ -371,26 +444,31 @@ body {
   font-size: 11px;
   color: var(--text-tertiary);
 }
+
 .legend-item {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 .legend-swatch {
   width: 9px;
   height: 9px;
   border-radius: 2px;
   display: inline-block;
 }
+
 .legend-swatch--up { background: var(--up-green); }
 .legend-swatch--slow { background: var(--warn-amber); }
 .legend-swatch--down { background: var(--down-red); }
 .legend-swatch--none { background: var(--border); }
 
 /* ---------------- Charts ---------------- */
+
 .chart-wrap {
   width: 100%;
 }
+
 .chart-svg {
   width: 100%;
   height: auto;
@@ -415,6 +493,8 @@ body {
   .metric-row { grid-template-columns: repeat(2, 1fr); }
   .layout { padding: 20px 16px 60px; }
   .topbar { padding: 16px 20px; flex-wrap: wrap; gap: 10px; }
+  .heatmap-row { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .heatmap-row__label { width: auto; text-align: left; }
 }
 
 @media (prefers-reduced-motion: reduce) {
