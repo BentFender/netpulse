@@ -140,6 +140,77 @@ async function refreshHeatmap() {
 
 // ---------------- SVG line chart helper ----------------
 
+// Candidate tick spacings, in milliseconds, ordered smallest to largest.
+// We pick the smallest one that still gives a reasonable number of ticks
+// across the visible time span, so dense/short ranges get hourly ticks
+// and long ranges fall back to daily ticks instead of being unreadable.
+const TICK_STEPS_MS = [
+  5 * 60 * 1000, // 5 min
+  15 * 60 * 1000, // 15 min
+  30 * 60 * 1000, // 30 min
+  60 * 60 * 1000, // 1 hour
+  2 * 60 * 60 * 1000, // 2 hours
+  3 * 60 * 60 * 1000, // 3 hours
+  6 * 60 * 60 * 1000, // 6 hours
+  12 * 60 * 60 * 1000, // 12 hours
+  24 * 60 * 60 * 1000, // 1 day
+  2 * 24 * 60 * 60 * 1000, // 2 days
+  7 * 24 * 60 * 60 * 1000, // 1 week
+];
+
+const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
+
+// Pick a tick step that yields roughly `targetTicks` ticks (aiming for
+// 5-8) across the given span, then snap tick positions to "nice"
+// boundaries (on the hour, every N hours, or midnight) so labels read
+// like a real clock/calendar instead of arbitrary offsets.
+function pickTickStepMs(spanMs, targetTicks = 6) {
+  for (const step of TICK_STEPS_MS) {
+    if (spanMs / step <= targetTicks * 1.8) return step;
+  }
+  return TICK_STEPS_MS[TICK_STEPS_MS.length - 1];
+}
+
+function snapToStep(date, stepMs) {
+  const t = date.getTime();
+  if (stepMs >= MS_PER_DAY) {
+    // snap to local midnight boundaries
+    const d = new Date(t);
+    d.setHours(0, 0, 0, 0);
+    const days = Math.ceil((t - d.getTime()) / MS_PER_DAY);
+    d.setDate(d.getDate() + days);
+    return d.getTime();
+  }
+  // snap to the next clean boundary of stepMs, anchored to local midnight
+  // (so e.g. 2-hour ticks land on 00:00, 02:00, 04:00 ... not 00:37, 02:37)
+  const dayStart = new Date(t);
+  dayStart.setHours(0, 0, 0, 0);
+  const offset = t - dayStart.getTime();
+  const snapped = Math.ceil(offset / stepMs) * stepMs;
+  return dayStart.getTime() + snapped;
+}
+
+function formatTickLabel(ts, stepMs, spanMs) {
+  const date = new Date(ts);
+  if (stepMs >= MS_PER_DAY) {
+    // day-granularity ticks: show the date
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  // hour-granularity ticks: show the time, plus the date when the
+  // visible span crosses multiple days (so labels stay unambiguous)
+  const timeStr = date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  if (spanMs > MS_PER_DAY) {
+    const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `${dateStr} ${timeStr}`;
+  }
+  return timeStr;
+}
+
 function drawLineChart(svg, series, opts) {
   const { width = 1000, height = 320, padding = { top: 20, right: 16, bottom: 30, left: 50 } } = opts;
   svg.innerHTML = "";
@@ -162,6 +233,15 @@ function drawLineChart(svg, series, opts) {
   const minVal = 0;
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
+
+  // Use the actual timestamp range across all series (not point index)
+  // so x position reflects real elapsed time, including gaps.
+  const allTs = series.flatMap((s) => s.points.map((p) => new Date(p.ts).getTime()));
+  const minTs = Math.min(...allTs);
+  const maxTs = Math.max(...allTs);
+  const tsSpan = Math.max(maxTs - minTs, 1);
+
+  const xForTs = (ts) => padding.left + ((ts - minTs) / tsSpan) * plotW;
 
   // gridlines + y-axis labels
   const gridCount = 4;
@@ -187,39 +267,45 @@ function drawLineChart(svg, series, opts) {
     svg.appendChild(label);
   }
 
-  // x-axis time labels (first, middle, last)
-  for (const s of series) {
-    if (s.points.length === 0) continue;
-    const n = s.points.length;
-    const idxs = n > 1 ? [0, Math.floor(n / 2), n - 1] : [0];
-    for (const idx of idxs) {
-      const p = s.points[idx];
-      const x = padding.left + (plotW / Math.max(n - 1, 1)) * idx;
-      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("x", x);
-      label.setAttribute("y", height - 8);
-      label.setAttribute("text-anchor", idx === 0 ? "start" : idx === n - 1 ? "end" : "middle");
-      label.setAttribute("font-size", "11");
-      label.setAttribute("fill", "var(--text-tertiary)");
-      label.textContent = new Date(p.ts).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-      svg.appendChild(label);
-    }
-    break; // labels based on first series' timeline only
+  // x-axis time ticks: real, evenly-spaced-in-time gridlines snapped to
+  // clean hour/day boundaries, labeled with actual local time/date.
+  const stepMs = pickTickStepMs(tsSpan);
+  let tickTs = snapToStep(new Date(minTs), stepMs);
+  const ticks = [];
+  while (tickTs <= maxTs) {
+    ticks.push(tickTs);
+    tickTs += stepMs;
+  }
+
+  for (const t of ticks) {
+    const x = xForTs(t);
+
+    const tickLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    tickLine.setAttribute("x1", x.toFixed(2));
+    tickLine.setAttribute("x2", x.toFixed(2));
+    tickLine.setAttribute("y1", padding.top);
+    tickLine.setAttribute("y2", height - padding.bottom);
+    tickLine.setAttribute("stroke", "var(--border)");
+    tickLine.setAttribute("stroke-width", "1");
+    tickLine.setAttribute("opacity", "0.5");
+    svg.appendChild(tickLine);
+
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", x.toFixed(2));
+    label.setAttribute("y", height - 8);
+    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("font-size", "11");
+    label.setAttribute("fill", "var(--text-tertiary)");
+    label.textContent = formatTickLabel(t, stepMs, tsSpan);
+    svg.appendChild(label);
   }
 
   for (const s of series) {
-    const pts = s.points.filter((p) => p.value !== null && !Number.isNaN(p.value));
-    if (pts.length === 0) continue;
     const n = s.points.length;
+    if (n === 0) continue;
 
-    const coords = s.points.map((p, idx) => {
-      const x = padding.left + (plotW / Math.max(n - 1, 1)) * idx;
+    const coords = s.points.map((p) => {
+      const x = xForTs(new Date(p.ts).getTime());
       const y =
         p.value === null || Number.isNaN(p.value)
           ? null
