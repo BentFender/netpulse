@@ -222,19 +222,22 @@ function seriesAverage(points) {
 // deviation, enforcing a minimum pixel spacing between picks so labels
 // never crowd into an unreadable blob. No fixed count — a chart with one
 // clear isolated spike gets one label, a chart with several well-separated
-// spikes gets several, and a tight jagged cluster only yields its single
-// most extreme point since its neighbors all fall within the spacing zone.
+// spikes gets several (even if they're not all the same height), and only
+// spikes that are genuinely close together on the x-axis get thinned down
+// to their tallest member. Separation in time, not relative height, is
+// what decides whether a peak earns its own label.
 function findStandoutPoints(coordsWithValue, avg, minSpacingPx) {
   if (avg === null) return [];
   const values = coordsWithValue.map((c) => c.value).filter((v) => v !== null && !Number.isNaN(v));
   if (values.length === 0) return [];
 
-  // Noise floor based on how spread out the data actually is, so a flat
-  // baseline never gets labeled just because a few spikes pulled the
-  // average upward (a point close to the bulk of the data is "normal"
-  // even if it's a bit below an average that outliers skewed).
-  const maxAbsDev = Math.max(...values.map((v) => Math.abs(v - avg)));
-  const noiseFloor = Math.max(maxAbsDev * 0.35, avg * 0.05, 1);
+  // Noise floor: filters out points that are basically indistinguishable
+  // from the average (sensor jitter, rounding), not points that are merely
+  // smaller than the single tallest spike in the series. Using a fraction
+  // of the tallest spike here would mean one big outlier silently raises
+  // the bar for every other (still genuinely significant) peak — exactly
+  // what was hiding real spikes that were merely "not the very tallest".
+  const noiseFloor = Math.max(avg * 0.15, 3);
 
   const candidates = coordsWithValue
     .filter((c) => c.value !== null && !Number.isNaN(c.value))
