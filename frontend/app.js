@@ -111,6 +111,38 @@ function classifyPing(point) {
   return "up";
 }
 
+// Local calendar-day key (not UTC) so a day boundary lines up with what the
+// person actually sees on a clock, e.g. "2026-06-28".
+function dayKey(ts) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function dayLabel(ts) {
+  return new Date(ts).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+// Sub-row boundaries to try, largest chunk (fewest rows per day) first.
+// A day only drops to a smaller chunk size if the larger one's row would
+// actually overflow the available width at the current cell size — so on
+// a wide screen most days stay at 2 rows (12h each), and only cramped
+// widths or denser data fall back to 6h/4h splits.
+const HEATMAP_SUBROW_HOURS = [12, 6, 4];
+const HEATMAP_CELL_PX = 11;
+const HEATMAP_GAP_PX = 3;
+// These two must match the .heatmap-row__label width and .heatmap-row gap
+// in style.css — used to work out how much horizontal space is actually
+// left for cells without relying on measuring an (easily zero-width, if
+// empty) flex child directly.
+const HEATMAP_LABEL_WIDTH_PX = 92;
+const HEATMAP_ROW_GAP_PX = 12;
+
+function maxCellsPerLine(availablePx) {
+  // n*cell + (n-1)*gap <= available  =>  n <= (available + gap) / (cell + gap)
+  return Math.max(1, Math.floor((availablePx + HEATMAP_GAP_PX) / (HEATMAP_CELL_PX + HEATMAP_GAP_PX)));
+}
+
 async function refreshHeatmap() {
   try {
     // Server now buckets large ranges down to ~700 points itself, so we
@@ -125,17 +157,101 @@ async function refreshHeatmap() {
       return;
     }
 
+    // Group points into one bucket per calendar day, oldest day first, so
+    // each day renders as its own labeled section instead of one long
+    // strip that wraps wherever the browser happens to run out of
+    // horizontal space (which made row boundaries meaningless before).
+    const byDay = new Map();
     for (const p of points) {
-      const cls = classifyPing(p);
-      const cell = document.createElement("div");
-      cell.className = `heatmap-cell heatmap-cell--${cls}`;
-      const countNote = p.bucket_size > 1 ? ` (${p.bucket_size} checks)` : "";
-      cell.title = `${new Date(p.ts).toLocaleString(undefined, { hour12: false })} — ${cls}${countNote}`;
-      heatmap.appendChild(cell);
+      const key = dayKey(p.ts);
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key).push(p);
+    }
+    const dayKeys = Array.from(byDay.keys()).sort((a, b) => a - b);
+
+    // Figure out how many cells actually fit on one line right now, based
+    // on the real rendered width of the heatmap container (not a guessed
+    // panel width), so this keeps working if the layout or screen size
+    // changes. Measuring the container directly — rather than an empty
+    // probe element — avoids a flexbox quirk where a flex child with no
+    // content yet can report a width of 0 even though space is available.
+    const heatmapWidth = heatmap.getBoundingClientRect().width;
+    const availablePx = heatmapWidth - HEATMAP_LABEL_WIDTH_PX - HEATMAP_ROW_GAP_PX;
+    const cellsPerLine = maxCellsPerLine(availablePx > 0 ? availablePx : 300);
+
+    for (const key of dayKeys) {
+      const dayPoints = byDay.get(key);
+
+      const dayBlock = document.createElement("div");
+      dayBlock.className = "heatmap-day";
+
+      // Pick the largest sub-row chunk (fewest rows) whose resulting row
+      // width still fits on one line. Falls back to splitting by however
+      // many cells actually fit if even a 4h chunk would overflow (e.g. a
+      // very narrow screen or unusually dense bucketing).
+      let chunks = null;
+      for (const hoursPerChunk of HEATMAP_SUBROW_HOURS) {
+        const candidate = splitByHourBoundary(dayPoints, key, hoursPerChunk);
+        const widestChunk = Math.max(...candidate.map((c) => c.length));
+        if (widestChunk <= cellsPerLine) {
+          chunks = candidate;
+          break;
+        }
+      }
+      if (chunks === null) {
+        chunks = [];
+        for (let i = 0; i < dayPoints.length; i += cellsPerLine) {
+          chunks.push(dayPoints.slice(i, i + cellsPerLine));
+        }
+      }
+
+      let firstSubRow = true;
+      for (const chunk of chunks) {
+        if (chunk.length === 0) continue;
+
+        const row = document.createElement("div");
+        row.className = "heatmap-row";
+
+        const label = document.createElement("div");
+        label.className = "heatmap-row__label";
+        label.textContent = firstSubRow ? dayLabel(key) : "";
+        row.appendChild(label);
+        firstSubRow = false;
+
+        const cellsWrap = document.createElement("div");
+        cellsWrap.className = "heatmap-row__cells";
+        for (const p of chunk) {
+          const cls = classifyPing(p);
+          const cell = document.createElement("div");
+          cell.className = `heatmap-cell heatmap-cell--${cls}`;
+          const countNote = p.bucket_size > 1 ? ` (${p.bucket_size} checks)` : "";
+          cell.title = `${new Date(p.ts).toLocaleString(undefined, { hour12: false })} — ${cls}${countNote}`;
+          cellsWrap.appendChild(cell);
+        }
+        row.appendChild(cellsWrap);
+        dayBlock.appendChild(row);
+      }
+
+      heatmap.appendChild(dayBlock);
     }
   } catch (e) {
     console.error("heatmap refresh failed", e);
   }
+}
+
+// Split one day's points into chunks aligned to clock boundaries (e.g.
+// 00:00-12:00 / 12:00-24:00 for a 12h split), not just evenly-sized
+// slices — so each sub-row corresponds to a real, readable time window.
+function splitByHourBoundary(dayPoints, dayStartTs, hoursPerChunk) {
+  const chunkMs = hoursPerChunk * 60 * 60 * 1000;
+  const numChunks = Math.ceil(24 / hoursPerChunk);
+  const chunks = Array.from({ length: numChunks }, () => []);
+  for (const p of dayPoints) {
+    const offsetMs = new Date(p.ts).getTime() - dayStartTs;
+    const idx = Math.min(numChunks - 1, Math.max(0, Math.floor(offsetMs / chunkMs)));
+    chunks[idx].push(p);
+  }
+  return chunks;
 }
 
 // ---------------- SVG line chart helper ----------------
