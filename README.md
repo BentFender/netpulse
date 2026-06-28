@@ -1,3 +1,8 @@
+bash
+
+cat /home/claude/netpulse-release/README.md
+Output
+
 # NetPulse — internet speed & uptime logger
 
 A self-hosted dashboard that runs real speedtests on a schedule, pings
@@ -15,33 +20,81 @@ actually reflect on — not just a live number that resets every refresh.
 
 ## Deploying on ZimaOS
 
-ZimaOS App Store / Compose UI (recommended)
-Install a customized app/ Import (top right corner)
-Paste docker compose lines in the top field, change hostname: "192.168.50.227" to your ZimaOS server address and click "Submit"
+The image is pre-built and published to GHCR by this repo's GitHub Actions
+workflow — `ghcr.io/bentfender/netpulse:latest`. ZimaOS just pulls it, no
+local build step needed.
 
+### Option A — ZimaOS App Store / Compose UI (recommended)
+
+1. In ZimaOS, choose **Install a customized app** (sometimes labeled
+   **Import** — usually a button in the top-right corner of the app list).
+2. Paste the following into the compose field, **replacing the hostname**
+   `192.168.50.227` with your own ZimaOS server's IP address:
+
+   ```yaml
+   services:
+     netpulse:
+       image: ghcr.io/bentfender/netpulse:latest
+       container_name: netpulse
+       restart: unless-stopped
+       network_mode: host   # most reliable for accurate speedtests/pings; see below for bridge-mode alternative
+       volumes:
+         - /DATA/AppData/netpulse/data:/data
+       environment:
+         - SPEEDTEST_INTERVAL_MIN=10   # how often to run a full speedtest
+         - PING_INTERVAL_SEC=60        # how often to ping for uptime
+         - PING_HOST=1.1.1.1           # host to ping for uptime checks
+
+   x-casaos:
+     hostname: "192.168.50.227"
+     scheme: http
+     index: /
+     port_map: "8077"
+     author: self
+     category: self
+     icon: ""
+     title:
+       custom: "netpulse"
+   ```
+
+3. Click **Submit** / **Install**. It pulls the image (no build), so this
+   should take seconds, not minutes.
+4. Open `http://<your-zimaos-ip>:8077` in a browser.
+
+`network_mode: host` is the most reliable option for accurate ping/speedtest
+results and needs no port mapping. If your ZimaOS setup doesn't like host
+networking (some app-store UIs prefer explicit ports), use the bridge-mode
+version instead:
+
+```yaml
 services:
   netpulse:
     image: ghcr.io/bentfender/netpulse:latest
     container_name: netpulse
     restart: unless-stopped
-    network_mode: host   # most reliable for accurate speedtests / pings; see README for bridge-mode alternative
+    ports:
+      - "8077:8077"
     volumes:
       - /DATA/AppData/netpulse/data:/data
     environment:
-      - SPEEDTEST_INTERVAL_MIN=10   # how often to run a full speedtest
-      - PING_INTERVAL_SEC=60        # how often to ping for uptime
-      - PING_HOST=1.1.1.1           # host to ping for uptime checks
+      - SPEEDTEST_INTERVAL_MIN=30
+      - PING_INTERVAL_SEC=60
+      - PING_HOST=1.1.1.1
+```
 
-x-casaos:
-  hostname: "192.168.50.227"
-  scheme: http
-  index: /
-  port_map: "8077"
-  author: self
-  category: self
-  icon: ""
-  title:
-    custom: "netpulse"
+### Option B — SSH / command line
+
+```bash
+docker run -d \
+  --name netpulse \
+  --network host \
+  --restart unless-stopped \
+  -v /DATA/AppData/netpulse/data:/data \
+  -e SPEEDTEST_INTERVAL_MIN=10 \
+  -e PING_INTERVAL_SEC=60 \
+  -e PING_HOST=1.1.1.1 \
+  ghcr.io/bentfender/netpulse:latest
+```
 
 Check it's running:
 
@@ -50,6 +103,17 @@ docker logs -f netpulse
 ```
 
 Then visit `http://<your-zimaos-ip>:8077`.
+
+### Updating to a new image version
+
+Whenever the GitHub Actions workflow rebuilds `:latest` (after a push to
+`main`), pull the new image and recreate the container:
+
+```bash
+docker pull ghcr.io/bentfender/netpulse:latest
+docker stop netpulse && docker rm netpulse
+# then re-run the docker run command above, or re-deploy via the ZimaOS UI
+```
 
 ---
 
@@ -110,3 +174,8 @@ delete that file.
   binary, licensed for personal/non-commercial use. The app passes
   `--accept-license --accept-gdpr` automatically so it never blocks on an
   interactive prompt.
+Done
+I also notice you already have a "NetPulse — Connection..." tab open in your browser — looks like your install actually worked already! While you're fixing the README, it'd be worth confirming that.
+
+
+
