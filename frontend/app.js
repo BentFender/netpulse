@@ -364,9 +364,11 @@ function drawLineChart(svg, series, opts) {
   // Average label rows are computed for every series up front (before any
   // drawing) so we know all their natural y-positions at once. That lets us
   // detect collisions between series (e.g. Download/Upload averages sitting
-  // close together) and resolve them by nudging the labels apart vertically,
-  // while keeping them anchored near their real height on the chart instead
-  // of relocating them to a fixed corner.
+  // close together) and resolve them by nudging the labels apart vertically.
+  // The labels themselves live in the y-axis scale column (right-aligned,
+  // just left of the gridlines — same spot as the "290 / 217 / 145..."
+  // numbers) rather than inside the plot area, so they can never sit on
+  // top of the data lines no matter what the values are.
   const avgRows = [];
   for (const s of series) {
     const avg = seriesAverage(s.points);
@@ -392,6 +394,22 @@ function drawLineChart(svg, series, opts) {
     row.y = Math.max(padding.top + 10, Math.min(row.y, height - padding.bottom - 4));
   }
   const avgYById = new Map(avgRows.map((row) => [row.series, row.y]));
+
+  // Draw the avg labels in the y-axis column now, before the series loop,
+  // so they sit visually grouped with the scale numbers rather than mixed
+  // in with per-series drawing order.
+  for (const [s, avgY] of avgYById) {
+    const row = avgRows.find((r) => r.series === s);
+    const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    avgLabel.setAttribute("x", padding.left - 10);
+    avgLabel.setAttribute("y", avgY.toFixed(2));
+    avgLabel.setAttribute("text-anchor", "end");
+    avgLabel.setAttribute("font-size", "10");
+    avgLabel.setAttribute("font-weight", "600");
+    avgLabel.setAttribute("fill", s.color);
+    avgLabel.textContent = `avg ${row.avg < 10 ? row.avg.toFixed(1) : Math.round(row.avg)}`;
+    svg.appendChild(avgLabel);
+  }
 
   for (const s of series) {
     const n = s.points.length;
@@ -439,22 +457,7 @@ function drawLineChart(svg, series, opts) {
       svg.appendChild(dot);
     }
 
-    // Average value label, placed at (or very near) this series' own
-    // average height — same row as where its average line actually sits.
-    // When two series' averages are close enough that their labels would
-    // overlap, both get nudged apart symmetrically (computed above) so
-    // they stay readable without losing their connection to the data.
     const avg = seriesAverage(s.points);
-    if (avg !== null) {
-      const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      avgLabel.setAttribute("x", padding.left + 6);
-      avgLabel.setAttribute("y", avgYById.get(s).toFixed(2));
-      avgLabel.setAttribute("font-size", "10");
-      avgLabel.setAttribute("font-weight", "600");
-      avgLabel.setAttribute("fill", s.color);
-      avgLabel.textContent = `avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
-      svg.appendChild(avgLabel);
-    }
 
     // Standout point labels: values deviating most from average (covers
     // both spikes above and dips below). No fixed count — labels are kept
