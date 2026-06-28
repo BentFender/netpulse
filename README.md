@@ -10,6 +10,7 @@ actually reflect on — not just a live number that resets every refresh.
 - **Lightweight ping check** every 60s for fine-grained uptime tracking
 - **7-day outage heatmap** — one cell per check, green/amber/red
 - **Speed history chart** (1h / 6h / 12h/ 24h / 7d / 30d) and **latency history chart** (1h / 6h / 12h/ 24h / 7d / 30d)
+- **Average values and max deviations clearly represented on the chart**
 - All data lives in a local SQLite file, so history survives container restarts
 - "Run speedtest now" button for an on-demand check
 ---
