@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetPulse — Connection Monitor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◉</span>
+    <span class="brand-name">NetPulse</span>
+  </div>
+  <div class="status-strip" id="statusStrip">
+    <div class="status-pill status-pill--loading" id="statusPill">
+      <span class="status-dot"></span>
+      <span class="status-text">Checking…</span>
+    </div>
+    <div class="status-meta">
+      <span id="lastPingTime">—</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <section class="hero">
+    <div class="hero-stat">
+      <div class="hero-stat__label">Uptime — last 24h</div>
+      <div class="hero-stat__value" id="uptime24h">—<span class="unit">%</span></div>
+      <div class="hero-stat__sub" id="uptime24hSub">awaiting data</div>
+    </div>
+    <div class="hero-divider" aria-hidden="true"></div>
+    <div class="hero-secondary">
+      <div class="hero-secondary__row">
+        <span class="hero-secondary__label">7 days</span>
+        <span class="hero-secondary__value" id="uptime7d">—%</span>
+      </div>
+      <div class="hero-secondary__row">
+        <span class="hero-secondary__label">30 days</span>
+        <span class="hero-secondary__value" id="uptime30d">—%</span>
+      </div>
+      <div class="hero-secondary__row">
+        <span class="hero-secondary__label">Last speedtest</span>
+        <span class="hero-secondary__value hero-secondary__value--small" id="lastSpeedTime">—</span>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <button class="btn-run" id="runNowBtn">
+        <span class="btn-run__icon">⟳</span> Run speedtest now
+      </button>
+    </div>
+  </section>
+
+  <section class="metric-row">
+    <div class="metric-card">
+      <div class="metric-card__label">Download</div>
+      <div class="metric-card__value"><span id="curDownload">—</span><span class="metric-card__unit">Mbps</span></div>
+      <div class="metric-card__bar"><div class="metric-card__bar-fill metric-card__bar-fill--download" id="downloadBar"></div></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-card__label">Upload</div>
+      <div class="metric-card__value"><span id="curUpload">—</span><span class="metric-card__unit">Mbps</span></div>
+      <div class="metric-card__bar"><div class="metric-card__bar-fill metric-card__bar-fill--upload" id="uploadBar"></div></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-card__label">Latency</div>
+      <div class="metric-card__value"><span id="curPing">—</span><span class="metric-card__unit">ms</span></div>
+      <div class="metric-card__bar"><div class="metric-card__bar-fill metric-card__bar-fill--ping" id="pingBar"></div></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-card__label">Server</div>
+      <div class="metric-card__value metric-card__value--text" id="curServer">—</div>
+      <div class="metric-card__sub" id="curServerSub">&nbsp;</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__header">
+      <h2 class="panel__title">Outage timeline</h2>
+      <p class="panel__hint">Each cell is one connectivity check. Read left → right, top → bottom, oldest to newest.</p>
+    </div>
+    <div class="heatmap-wrap">
+      <div class="heatmap" id="heatmap"></div>
+      <div class="heatmap-legend">
+        <span class="legend-item"><span class="legend-swatch legend-swatch--up"></span>Up</span>
+        <span class="legend-item"><span class="legend-swatch legend-swatch--slow"></span>Slow</span>
+        <span class="legend-item"><span class="legend-swatch legend-swatch--down"></span>Down</span>
+        <span class="legend-item"><span class="legend-swatch legend-swatch--none"></span>No data</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__header">
+      <h2 class="panel__title">Speed history</h2>
+      <div class="range-toggle" id="speedRangeToggle">
+        <button class="range-btn" data-hours="6">6h</button>
+        <button class="range-btn" data-hours="12">12h</button>
+        <button class="range-btn" data-hours="24">24h</button>
+        <button class="range-btn range-btn--active" data-hours="168">7d</button>
+        <button class="range-btn" data-hours="720">30d</button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <svg id="speedChart" class="chart-svg" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__header">
+      <h2 class="panel__title">Latency history</h2>
+      <div class="range-toggle" id="latRangeToggle">
+        <button class="range-btn" data-hours="1">1h</button>
+        <button class="range-btn" data-hours="6">6h</button>
+        <button class="range-btn range-btn--active" data-hours="24">24h</button>
+        <button class="range-btn" data-hours="168">7d</button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <svg id="latencyChart" class="chart-svg" viewBox="0 0 1000 240" preserveAspectRatio="none"></svg>
+    </div>
+  </section>
+
+  <footer class="footer-note">
+    <span id="footerConfig">—</span>
+  </footer>
+
+</main>
+
+<script src="app.js?v=3"></script>
+</body>
+</html>
