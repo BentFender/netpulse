@@ -467,7 +467,7 @@ function drawLineChart(svg, series, opts) {
 
 // ---------------- Speed history chart ----------------
 
-let currentSpeedHours = 24;
+let currentSpeedHours = 168;
 let currentLatHours = 24;
 
 async function refreshSpeedChart() {
