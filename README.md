@@ -15,7 +15,8 @@ actually reflect on — not just a live number that resets every refresh.
 - **Speed history chart** (24h / 7d / 30d) and **latency history chart** (6h / 24h / 7d)
 - All data lives in a local SQLite file, so history survives container restarts
 - "Run speedtest now" button for an on-demand check
-
+---
+*All coding work made by free access ClaudeAI because I have no coding experience just needed a tool. Testing done on my home server with help of ClaudeAI
 ---
 
 ## Deploying on ZimaOS
