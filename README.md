@@ -59,7 +59,7 @@ local build step needed.
 
 3. Click **Submit** / **Install**. It pulls the image (no build), so this
    should take seconds, not minutes.
-4. Open directly from ZimaOS dashboard or `http://<your-zimaos-ip>:8077` in a browser.
+4. Open directly from **ZimaOS dashboard** or `http://<your-zimaos-ip>:8077` in a browser.
 
 `network_mode: host` is the most reliable option for accurate ping/speedtest
 results and needs no port mapping. If your ZimaOS setup doesn't like host
