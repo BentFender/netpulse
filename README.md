@@ -1,8 +1,3 @@
-bash
-
-cat /home/claude/netpulse-release/README.md
-Output
-
 # NetPulse — internet speed & uptime logger
 
 A self-hosted dashboard that runs real speedtests on a schedule, pings
