@@ -1,0 +1,23 @@
+services:
+  netpulse:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME:latest   # <-- replace before installing
+    container_name: netpulse
+    restart: unless-stopped
+    network_mode: host   # most reliable for accurate speedtests / pings; see README for bridge-mode alternative
+    volumes:
+      - /DATA/AppData/netpulse/data:/data
+    environment:
+      - SPEEDTEST_INTERVAL_MIN=10   # how often to run a full speedtest
+      - PING_INTERVAL_SEC=60        # how often to ping for uptime
+      - PING_HOST=1.1.1.1           # host to ping for uptime checks
+
+x-casaos:
+  hostname: "192.168.50.227"
+  scheme: http
+  index: /
+  port_map: "8077"
+  author: self
+  category: self
+  icon: ""
+  title:
+    custom: "netpulse"

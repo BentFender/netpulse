@@ -1,0 +1,13 @@
+services:
+  netpulse:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME:latest   # <-- replace before installing
+    container_name: netpulse
+    restart: unless-stopped
+    ports:
+      - "8077:8077"
+    volumes:
+      - /DATA/AppData/netpulse/data:/data
+    environment:
+      - SPEEDTEST_INTERVAL_MIN=30
+      - PING_INTERVAL_SEC=60
+      - PING_HOST=1.1.1.1
