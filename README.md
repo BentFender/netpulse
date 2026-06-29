@@ -6,7 +6,7 @@ actually reflect on — not just a live number that resets every refresh.
 
 <img width="871" height="1348" alt="Screenshot_20260629_211352" src="https://github.com/user-attachments/assets/76d454ef-03e8-46aa-a10f-a79d98ae5e19" />
 
-- **Full speedtest** (download/upload/ping) on a timer — every 30 min by default
+- **Full speedtest** (download/upload/ping) on a timer — every 10 min by default
 - **Lightweight ping check** every 60s for fine-grained uptime tracking
 - **7-day outage heatmap** — one cell per check, green/amber/red
 - **Speed history chart** (1h / 6h / 12h/ 24h / 7d / 30d) and **latency history chart** (1h / 6h / 12h/ 24h / 7d / 30d)
