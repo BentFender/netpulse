@@ -115,6 +115,7 @@ body {
 .status-pill--down { color: var(--down-red); border-color: var(--down-red-dim); }
 
 .status-pill--loading .status-dot { animation: blink 1.2s ease-in-out infinite; }
+
 @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
 .status-meta {
@@ -375,61 +376,34 @@ body {
   color: var(--signal-blue);
 }
 
-/* ---------------- Heatmap ---------------- */
-
+/* ---------------- Heatmap ----------------
+   Switched from `display: grid; grid-template-columns: repeat(auto-fill, 11px)`
+   to an explicit flexbox wrap. auto-fill computes column tracks from the
+   container's width but doesn't reliably force a wrap at a fixed item
+   count — if the container briefly reports a wider available width than
+   intended (e.g. mid-layout, during a panel resize, or on very wide
+   viewports), every cell ends up packed into a single row with no wrap
+   instead of breaking into a grid. flex-wrap guarantees cells wrap onto
+   a new line whenever the row runs out of horizontal space, with no
+   dependency on auto-fill's column-track guessing. */
 .heatmap-wrap {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-/* One row per calendar day: a fixed-width date label on the left, then
-   that day's connectivity-check cells on the right. Rows stack vertically
-   so the grid always reads as "7 days, one line each" regardless of how
-   many checks happened to land in a given day or how wide the window is —
-   unlike a single auto-wrapping grid, where row length (and therefore
-   which day starts where) depended entirely on viewport width. */
 .heatmap {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.heatmap-day {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.heatmap-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.heatmap-row__label {
-  flex: 0 0 auto;
-  width: 92px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  text-align: right;
-}
-
-.heatmap-row__cells {
-  flex: 1 1 auto;
-  display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 3px;
 }
 
 .heatmap-cell {
+  flex: 0 0 11px;
   width: 11px;
   height: 11px;
   border-radius: 2px;
   background: var(--border);
-  flex: 0 0 auto;
 }
 
 .heatmap-cell--up { background: var(--up-green); }
@@ -489,12 +463,14 @@ body {
     grid-template-columns: 1fr;
     gap: 20px;
   }
+
   .hero-divider { display: none; }
+
   .metric-row { grid-template-columns: repeat(2, 1fr); }
+
   .layout { padding: 20px 16px 60px; }
+
   .topbar { padding: 16px 20px; flex-wrap: wrap; gap: 10px; }
-  .heatmap-row { flex-direction: column; align-items: flex-start; gap: 4px; }
-  .heatmap-row__label { width: auto; text-align: left; }
 }
 
 @media (prefers-reduced-motion: reduce) {
