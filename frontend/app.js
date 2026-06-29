@@ -25,12 +25,13 @@ async function fetchJSON(url, opts) {
 }
 
 // ---------------- Status pill + headline metrics ----------------
+
 async function refreshStatus() {
   try {
     const data = await fetchJSON("/api/status");
-
     const pill = el("statusPill");
     const text = pill.querySelector(".status-text");
+
     pill.classList.remove("status-pill--up", "status-pill--down", "status-pill--loading");
 
     if (data.last_ping) {
@@ -64,6 +65,7 @@ async function refreshStatus() {
       el("curServer").textContent = "Speedtest failed";
       el("curServerSub").textContent = sp.error ? sp.error.slice(0, 60) : "";
       el("lastSpeedTime").textContent = relTime(sp.ts);
+
       el("downloadBar").style.width = "0%";
       el("uploadBar").style.width = "0%";
       el("pingBar").style.width = "0%";
@@ -78,6 +80,7 @@ async function refreshStatus() {
 }
 
 // ---------------- Headline uptime numbers ----------------
+
 async function refreshSummary() {
   try {
     const data = await fetchJSON("/api/summary");
@@ -100,11 +103,44 @@ async function refreshSummary() {
 }
 
 // ---------------- Heatmap ----------------
+
 function classifyPing(point) {
   if (!point) return "none";
   if (!point.up) return "down";
   if (point.latency_ms !== null && point.latency_ms > 150) return "slow";
   return "up";
+}
+
+// Local calendar-day key (not UTC) so a day boundary lines up with what the
+// person actually sees on a clock, e.g. "2026-06-28".
+function dayKey(ts) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function dayLabel(ts) {
+  return new Date(ts).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+// Sub-row boundaries to try, largest chunk (fewest rows per day) first.
+// A day only drops to a smaller chunk size if the larger one's row would
+// actually overflow the available width at the current cell size — so on
+// a wide screen most days stay at 2 rows (12h each), and only cramped
+// widths or denser data fall back to 6h/4h splits.
+const HEATMAP_SUBROW_HOURS = [12, 6, 4];
+const HEATMAP_CELL_PX = 11;
+const HEATMAP_GAP_PX = 3;
+// These two must match the .heatmap-row__label width and .heatmap-row gap
+// in style.css — used to work out how much horizontal space is actually
+// left for cells without relying on measuring an (easily zero-width, if
+// empty) flex child directly.
+const HEATMAP_LABEL_WIDTH_PX = 92;
+const HEATMAP_ROW_GAP_PX = 12;
+
+function maxCellsPerLine(availablePx) {
+  // n*cell + (n-1)*gap <= available  =>  n <= (available + gap) / (cell + gap)
+  return Math.max(1, Math.floor((availablePx + HEATMAP_GAP_PX) / (HEATMAP_CELL_PX + HEATMAP_GAP_PX)));
 }
 
 async function refreshHeatmap() {
@@ -121,17 +157,101 @@ async function refreshHeatmap() {
       return;
     }
 
+    // Group points into one bucket per calendar day, oldest day first, so
+    // each day renders as its own labeled section instead of one long
+    // strip that wraps wherever the browser happens to run out of
+    // horizontal space (which made row boundaries meaningless before).
+    const byDay = new Map();
     for (const p of points) {
-      const cls = classifyPing(p);
-      const cell = document.createElement("div");
-      cell.className = `heatmap-cell heatmap-cell--${cls}`;
-      const countNote = p.bucket_size > 1 ? ` (${p.bucket_size} checks)` : "";
-      cell.title = `${new Date(p.ts).toLocaleString(undefined, { hour12: false })} — ${cls}${countNote}`;
-      heatmap.appendChild(cell);
+      const key = dayKey(p.ts);
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key).push(p);
+    }
+    const dayKeys = Array.from(byDay.keys()).sort((a, b) => a - b);
+
+    // Figure out how many cells actually fit on one line right now, based
+    // on the real rendered width of the heatmap container (not a guessed
+    // panel width), so this keeps working if the layout or screen size
+    // changes. Measuring the container directly — rather than an empty
+    // probe element — avoids a flexbox quirk where a flex child with no
+    // content yet can report a width of 0 even though space is available.
+    const heatmapWidth = heatmap.getBoundingClientRect().width;
+    const availablePx = heatmapWidth - HEATMAP_LABEL_WIDTH_PX - HEATMAP_ROW_GAP_PX;
+    const cellsPerLine = maxCellsPerLine(availablePx > 0 ? availablePx : 300);
+
+    for (const key of dayKeys) {
+      const dayPoints = byDay.get(key);
+
+      const dayBlock = document.createElement("div");
+      dayBlock.className = "heatmap-day";
+
+      // Pick the largest sub-row chunk (fewest rows) whose resulting row
+      // width still fits on one line. Falls back to splitting by however
+      // many cells actually fit if even a 4h chunk would overflow (e.g. a
+      // very narrow screen or unusually dense bucketing).
+      let chunks = null;
+      for (const hoursPerChunk of HEATMAP_SUBROW_HOURS) {
+        const candidate = splitByHourBoundary(dayPoints, key, hoursPerChunk);
+        const widestChunk = Math.max(...candidate.map((c) => c.length));
+        if (widestChunk <= cellsPerLine) {
+          chunks = candidate;
+          break;
+        }
+      }
+      if (chunks === null) {
+        chunks = [];
+        for (let i = 0; i < dayPoints.length; i += cellsPerLine) {
+          chunks.push(dayPoints.slice(i, i + cellsPerLine));
+        }
+      }
+
+      let firstSubRow = true;
+      for (const chunk of chunks) {
+        if (chunk.length === 0) continue;
+
+        const row = document.createElement("div");
+        row.className = "heatmap-row";
+
+        const label = document.createElement("div");
+        label.className = "heatmap-row__label";
+        label.textContent = firstSubRow ? dayLabel(key) : "";
+        row.appendChild(label);
+        firstSubRow = false;
+
+        const cellsWrap = document.createElement("div");
+        cellsWrap.className = "heatmap-row__cells";
+        for (const p of chunk) {
+          const cls = classifyPing(p);
+          const cell = document.createElement("div");
+          cell.className = `heatmap-cell heatmap-cell--${cls}`;
+          const countNote = p.bucket_size > 1 ? ` (${p.bucket_size} checks)` : "";
+          cell.title = `${new Date(p.ts).toLocaleString(undefined, { hour12: false })} — ${cls}${countNote}`;
+          cellsWrap.appendChild(cell);
+        }
+        row.appendChild(cellsWrap);
+        dayBlock.appendChild(row);
+      }
+
+      heatmap.appendChild(dayBlock);
     }
   } catch (e) {
     console.error("heatmap refresh failed", e);
   }
+}
+
+// Split one day's points into chunks aligned to clock boundaries (e.g.
+// 00:00-12:00 / 12:00-24:00 for a 12h split), not just evenly-sized
+// slices — so each sub-row corresponds to a real, readable time window.
+function splitByHourBoundary(dayPoints, dayStartTs, hoursPerChunk) {
+  const chunkMs = hoursPerChunk * 60 * 60 * 1000;
+  const numChunks = Math.ceil(24 / hoursPerChunk);
+  const chunks = Array.from({ length: numChunks }, () => []);
+  for (const p of dayPoints) {
+    const offsetMs = new Date(p.ts).getTime() - dayStartTs;
+    const idx = Math.min(numChunks - 1, Math.max(0, Math.floor(offsetMs / chunkMs)));
+    chunks[idx].push(p);
+  }
+  return chunks;
 }
 
 // ---------------- SVG line chart helper ----------------
@@ -141,17 +261,17 @@ async function refreshHeatmap() {
 // across the visible time span, so dense/short ranges get hourly ticks
 // and long ranges fall back to daily ticks instead of being unreadable.
 const TICK_STEPS_MS = [
-  5 * 60 * 1000,            // 5 min
-  15 * 60 * 1000,           // 15 min
-  30 * 60 * 1000,           // 30 min
-  60 * 60 * 1000,           // 1 hour
-  2 * 60 * 60 * 1000,       // 2 hours
-  3 * 60 * 60 * 1000,       // 3 hours
-  6 * 60 * 60 * 1000,       // 6 hours
-  12 * 60 * 60 * 1000,      // 12 hours
-  24 * 60 * 60 * 1000,      // 1 day
-  2 * 24 * 60 * 60 * 1000,  // 2 days
-  7 * 24 * 60 * 60 * 1000,  // 1 week
+  5 * 60 * 1000, // 5 min
+  15 * 60 * 1000, // 15 min
+  30 * 60 * 1000, // 30 min
+  60 * 60 * 1000, // 1 hour
+  2 * 60 * 60 * 1000, // 2 hours
+  3 * 60 * 60 * 1000, // 3 hours
+  6 * 60 * 60 * 1000, // 6 hours
+  12 * 60 * 60 * 1000, // 12 hours
+  24 * 60 * 60 * 1000, // 1 day
+  2 * 24 * 60 * 60 * 1000, // 2 days
+  7 * 24 * 60 * 60 * 1000, // 1 week
 ];
 
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -218,19 +338,22 @@ function seriesAverage(points) {
 // deviation, enforcing a minimum pixel spacing between picks so labels
 // never crowd into an unreadable blob. No fixed count — a chart with one
 // clear isolated spike gets one label, a chart with several well-separated
-// spikes gets several, and a tight jagged cluster only yields its single
-// most extreme point since its neighbors all fall within the spacing zone.
+// spikes gets several (even if they're not all the same height), and only
+// spikes that are genuinely close together on the x-axis get thinned down
+// to their tallest member. Separation in time, not relative height, is
+// what decides whether a peak earns its own label.
 function findStandoutPoints(coordsWithValue, avg, minSpacingPx) {
   if (avg === null) return [];
   const values = coordsWithValue.map((c) => c.value).filter((v) => v !== null && !Number.isNaN(v));
   if (values.length === 0) return [];
 
-  // Noise floor based on how spread out the data actually is, so a flat
-  // baseline never gets labeled just because a few spikes pulled the
-  // average upward (a point close to the bulk of the data is "normal"
-  // even if it's a bit below an average that outliers skewed).
-  const maxAbsDev = Math.max(...values.map((v) => Math.abs(v - avg)));
-  const noiseFloor = Math.max(maxAbsDev * 0.35, avg * 0.05, 1);
+  // Noise floor: filters out points that are basically indistinguishable
+  // from the average (sensor jitter, rounding), not points that are merely
+  // smaller than the single tallest spike in the series. Using a fraction
+  // of the tallest spike here would mean one big outlier silently raises
+  // the bar for every other (still genuinely significant) peak — exactly
+  // what was hiding real spikes that were merely "not the very tallest".
+  const noiseFloor = Math.max(avg * 0.15, 3);
 
   const candidates = coordsWithValue
     .filter((c) => c.value !== null && !Number.isNaN(c.value))
@@ -253,7 +376,6 @@ function drawLineChart(svg, series, opts) {
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
   const allValues = series.flatMap((s) => s.points.map((p) => p.value)).filter((v) => v !== null && !Number.isNaN(v));
-
   if (allValues.length === 0) {
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", width / 2);
@@ -337,6 +459,7 @@ function drawLineChart(svg, series, opts) {
 
   for (const t of ticks) {
     const x = xForTs(t);
+
     const tickLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
     tickLine.setAttribute("x1", x.toFixed(2));
     tickLine.setAttribute("x2", x.toFixed(2));
@@ -355,6 +478,56 @@ function drawLineChart(svg, series, opts) {
     label.setAttribute("fill", "var(--text-tertiary)");
     label.textContent = formatTickLabel(t, stepMs, tsSpan);
     svg.appendChild(label);
+  }
+
+  // Average label rows are computed for every series up front (before any
+  // drawing) so we know all their natural y-positions at once. That lets us
+  // detect collisions between series (e.g. Download/Upload averages sitting
+  // close together) and resolve them by nudging the labels apart vertically.
+  // The labels themselves live in the y-axis scale column (right-aligned,
+  // just left of the gridlines — same spot as the "290 / 217 / 145..."
+  // numbers) rather than inside the plot area, so they can never sit on
+  // top of the data lines no matter what the values are.
+  const avgRows = [];
+  for (const s of series) {
+    const avg = seriesAverage(s.points);
+    if (avg === null) continue;
+    const avgY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
+    avgRows.push({ series: s, avg, y: avgY });
+  }
+  avgRows.sort((a, b) => a.y - b.y);
+
+  const MIN_LABEL_GAP_PX = 13; // smallest vertical gap that keeps stacked labels readable
+  for (let i = 1; i < avgRows.length; i++) {
+    const prev = avgRows[i - 1];
+    const cur = avgRows[i];
+    const gap = cur.y - prev.y;
+    if (gap < MIN_LABEL_GAP_PX) {
+      const push = (MIN_LABEL_GAP_PX - gap) / 2;
+      prev.y -= push;
+      cur.y += push;
+    }
+  }
+  // Keep everything inside the plot area after nudging.
+  for (const row of avgRows) {
+    row.y = Math.max(padding.top + 10, Math.min(row.y, height - padding.bottom - 4));
+  }
+  const avgYById = new Map(avgRows.map((row) => [row.series, row.y]));
+
+  // Draw the avg labels in the y-axis column now, before the series loop,
+  // so they sit visually grouped with the scale numbers rather than mixed
+  // in with per-series drawing order.
+  for (const [s, avgY] of avgYById) {
+    const row = avgRows.find((r) => r.series === s);
+    const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    avgLabel.setAttribute("x", padding.left - 10);
+    avgLabel.setAttribute("y", avgY.toFixed(2));
+    avgLabel.setAttribute("text-anchor", "end");
+    avgLabel.setAttribute("font-size", "10");
+    avgLabel.setAttribute("font-weight", "600");
+    avgLabel.setAttribute("fill", s.color);
+    avgLabel.textContent = `avg ${row.avg < 10 ? row.avg.toFixed(1) : Math.round(row.avg)}`;
+    svg.appendChild(avgLabel);
   }
 
   for (const s of series) {
@@ -403,20 +576,7 @@ function drawLineChart(svg, series, opts) {
       svg.appendChild(dot);
     }
 
-    // Average value label, left side of the chart, stacked per series
-    // so multiple lines (e.g. Download/Upload) don't overlap.
     const avg = seriesAverage(s.points);
-    if (avg !== null) {
-      const avgY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
-      const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      avgLabel.setAttribute("x", padding.left + 6);
-      avgLabel.setAttribute("y", Math.max(padding.top + 10, Math.min(avgY - 4, height - padding.bottom - 4)));
-      avgLabel.setAttribute("font-size", "10");
-      avgLabel.setAttribute("font-weight", "600");
-      avgLabel.setAttribute("fill", s.color);
-      avgLabel.textContent = `avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
-      svg.appendChild(avgLabel);
-    }
 
     // Standout point labels: values deviating most from average (covers
     // both spikes above and dips below). No fixed count — labels are kept
@@ -463,7 +623,8 @@ function drawLineChart(svg, series, opts) {
 }
 
 // ---------------- Speed history chart ----------------
-let currentSpeedHours = 24;
+
+let currentSpeedHours = 168;
 let currentLatHours = 24;
 
 async function refreshSpeedChart() {
@@ -481,6 +642,7 @@ async function refreshSpeedChart() {
       color: "#4ECB8F",
       points: data.points.map((p) => ({ ts: p.ts, value: p.up ? p.upload_mbps : null })),
     };
+
     // resolve CSS var manually since SVG attrs don't resolve var() reliably across all contexts
     downloadSeries.color = "#5B9DFF";
 
@@ -494,11 +656,13 @@ async function refreshLatencyChart() {
   try {
     const data = await fetchJSON(`/api/uptime?hours=${currentLatHours}&max_points=400`);
     const svg = el("latencyChart");
+
     const series = {
       label: "Latency",
       color: "#F0A23A",
       points: data.points.map((p) => ({ ts: p.ts, value: p.up ? p.latency_ms : null })),
     };
+
     drawLineChart(svg, [series], { height: 240, rangeHours: currentLatHours });
   } catch (e) {
     console.error("latency chart refresh failed", e);
@@ -506,6 +670,7 @@ async function refreshLatencyChart() {
 }
 
 // ---------------- Range toggles ----------------
+
 function setupRangeToggle(containerId, onSelect) {
   const container = el(containerId);
   container.addEventListener("click", (e) => {
@@ -528,6 +693,7 @@ setupRangeToggle("latRangeToggle", (hours) => {
 });
 
 // ---------------- Run speedtest now ----------------
+
 el("runNowBtn").addEventListener("click", async () => {
   const btn = el("runNowBtn");
   const icon = btn.querySelector(".btn-run__icon");
@@ -568,6 +734,7 @@ el("runNowBtn").addEventListener("click", async () => {
 });
 
 // ---------------- Init ----------------
+
 function refreshAll() {
   refreshStatus();
   refreshSummary();
