@@ -230,14 +230,7 @@ def api_status():
 
 @app.route("/api/uptime")
 def api_uptime():
-    """Uptime % and heatmap-friendly bucketed ping data over a given window.
-
-    For large windows, raw per-ping points are bucketed server-side so the
-    response stays small regardless of how long the monitor has been running.
-    Pass max_points=0 to force raw (unbucketed) output.
-    """
     hours = float(request.args.get("hours", "24"))
-    max_points = int(request.args.get("max_points", "720"))
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
     with closing(get_conn()) as conn:
@@ -246,34 +239,19 @@ def api_uptime():
             (since,),
         ).fetchall()
 
-    total = len(rows)
-    up_count = sum(1 for r in rows if r[1] == 1)
-    uptime_pct = (up_count / total * 100) if total else None
+    # Hardcoded 6-minute bucket: 6 pings (6 * 60s = 360s)
+    bucket_size = 6 
+    points = []
+    for i in range(0, len(rows), bucket_size):
+        chunk = rows[i : i + bucket_size]
+        any_down = any(r[1] == 0 for r in chunk)
+        points.append({
+            "ts": chunk[-1][0],
+            "up": not any_down,
+            "bucket_size": len(chunk)
+        })
 
-    if max_points and total > max_points:
-        bucket_size = math.ceil(total / max_points)
-        points = []
-        for i in range(0, total, bucket_size):
-            chunk = rows[i : i + bucket_size]
-            any_down = any(r[1] == 0 for r in chunk)
-            latencies = [r[2] for r in chunk if r[2] is not None]
-            avg_latency = sum(latencies) / len(latencies) if latencies else None
-            points.append({
-                "ts": chunk[-1][0],
-                "up": not any_down,
-                "latency_ms": avg_latency,
-                "bucket_size": len(chunk),
-            })
-    else:
-        points = [{"ts": r[0], "up": bool(r[1]), "latency_ms": r[2], "bucket_size": 1} for r in rows]
-
-    return jsonify({
-        "hours": hours,
-        "total_checks": total,
-        "up_checks": up_count,
-        "uptime_pct": uptime_pct,
-        "points": points,
-    })
+    return jsonify({"points": points})
 
 
 @app.route("/api/speedhistory")
