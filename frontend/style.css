@@ -115,6 +115,7 @@ body {
 .status-pill--down { color: var(--down-red); border-color: var(--down-red-dim); }
 
 .status-pill--loading .status-dot { animation: blink 1.2s ease-in-out infinite; }
+
 @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
 .status-meta {
@@ -375,7 +376,17 @@ body {
   color: var(--signal-blue);
 }
 
-/* ---------------- Heatmap ---------------- */
+/* ---------------- Heatmap ----------------
+   Each day renders as its own fixed 48-column grid (288 cells / 48 =
+   6 rows per day, at 5-min resolution), so a day's row width is always
+   exactly 48 cells regardless of the panel's available pixel width —
+   unlike `auto-fill`, which derives column count from container width
+   and can vary or, in edge cases, fail to wrap at all.
+
+   `.heatmap` itself is the scroll area: capped to a max-height that
+   shows roughly 3 days at once, with the rest of the week reachable by
+   scrolling. app.js scrolls this to the bottom by default so the most
+   recent days are visible on load. */
 
 .heatmap-wrap {
   display: flex;
@@ -383,44 +394,30 @@ body {
   gap: 14px;
 }
 
-/* One row per calendar day: a fixed-width date label on the left, then
-   that day's connectivity-check cells on the right. Rows stack vertically
-   so the grid always reads as "7 days, one line each" regardless of how
-   many checks happened to land in a given day or how wide the window is —
-   unlike a single auto-wrapping grid, where row length (and therefore
-   which day starts where) depended entirely on viewport width. */
 .heatmap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px; /* keep cells clear of the scrollbar */
 }
 
 .heatmap-day {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
 }
 
-.heatmap-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.heatmap-row__label {
-  flex: 0 0 auto;
-  width: 92px;
+.heatmap-day__label {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-tertiary);
-  white-space: nowrap;
-  text-align: right;
 }
 
-.heatmap-row__cells {
-  flex: 1 1 auto;
-  display: flex;
-  flex-wrap: nowrap;
+.heatmap-day__grid {
+  display: grid;
+  grid-template-columns: repeat(48, 11px);
   gap: 3px;
 }
 
@@ -429,7 +426,6 @@ body {
   height: 11px;
   border-radius: 2px;
   background: var(--border);
-  flex: 0 0 auto;
 }
 
 .heatmap-cell--up { background: var(--up-green); }
@@ -489,12 +485,20 @@ body {
     grid-template-columns: 1fr;
     gap: 20px;
   }
+
   .hero-divider { display: none; }
+
   .metric-row { grid-template-columns: repeat(2, 1fr); }
+
   .layout { padding: 20px 16px 60px; }
+
   .topbar { padding: 16px 20px; flex-wrap: wrap; gap: 10px; }
-  .heatmap-row { flex-direction: column; align-items: flex-start; gap: 4px; }
-  .heatmap-row__label { width: auto; text-align: left; }
+
+  /* On narrow screens, 48 columns * (11px + 3px gap) = 672px won't fit;
+     let the day grid scroll horizontally rather than squeezing cells. */
+  .heatmap-day__grid {
+    overflow-x: auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
