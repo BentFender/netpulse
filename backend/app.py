@@ -4,7 +4,6 @@ NetPulse — internet speed & uptime logger.
 Runs periodic speedtests (download/upload/ping) plus lightweight ping checks,
 stores results in SQLite, and serves a JSON API + static dashboard.
 """
-
 import json
 import math
 import os
@@ -22,7 +21,6 @@ SPEEDTEST_INTERVAL_MIN = int(os.environ.get("SPEEDTEST_INTERVAL_MIN", "30"))
 PING_INTERVAL_SEC = int(os.environ.get("PING_INTERVAL_SEC", "60"))
 PING_HOST = os.environ.get("PING_HOST", "1.1.1.1")
 PING_TIMEOUT_SEC = int(os.environ.get("PING_TIMEOUT_SEC", "5"))
-
 FRONTEND_DIR = os.environ.get("NETPULSE_FRONTEND_DIR", "/frontend")
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
@@ -71,6 +69,34 @@ def init_db():
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Scheduling helpers
+# ---------------------------------------------------------------------------
+
+def sleep_until_next_boundary(interval_sec):
+    """Sleep until the next wall-clock boundary that's a multiple of
+    interval_sec seconds since the Unix epoch (UTC).
+
+    This keeps checks aligned to clean clock marks (e.g. every :00 for a
+    60s interval, or :00/:15/:30/:45 for a 15-minute interval) regardless
+    of when the process started or how long the previous check took. The
+    target time is computed from the absolute clock rather than relative
+    to "now + interval", so there's no cumulative drift across restarts
+    or slow runs.
+
+    If a check takes longer than interval_sec, the next boundary is
+    simply in the past relative to "now" by the time we get back here —
+    math.ceil still finds the *next* future boundary, so we skip ahead
+    cleanly instead of firing immediately (which would just resume
+    drifting) or stacking up missed runs.
+    """
+    now = time.time()
+    next_tick = math.ceil(now / interval_sec) * interval_sec
+    sleep_for = next_tick - now
+    if sleep_for > 0:
+        time.sleep(sleep_for)
 
 
 # ---------------------------------------------------------------------------
@@ -139,14 +165,12 @@ def do_speedtest():
                 text=True,
                 timeout=SPEEDTEST_TIMEOUT_SEC,
             )
-
             if result.returncode != 0:
                 raise RuntimeError(
                     f"speedtest exited {result.returncode}: {result.stderr.strip()[:300]}"
                 )
 
             data = json.loads(result.stdout)
-
             # bandwidth is in bytes/sec in Ookla's JSON; convert to Mbps (megabits/sec)
             download_mbps = data["download"]["bandwidth"] * 8 / 1_000_000
             upload_mbps = data["upload"]["bandwidth"] * 8 / 1_000_000
@@ -162,6 +186,7 @@ def do_speedtest():
                     (ts, download_mbps, upload_mbps, ping_ms, server_name),
                 )
                 conn.commit()
+
         except Exception as e:
             with _db_lock, closing(get_conn()) as conn:
                 conn.execute(
@@ -176,16 +201,22 @@ def do_speedtest():
 
 
 def ping_loop():
+    # Aligns every check to the next clean wall-clock boundary (e.g. every
+    # :00 second of the minute for the default 60s interval) instead of
+    # sleeping a fixed duration after each run, so checks never drift off
+    # the minute mark regardless of when the app started or how long a
+    # check took.
     while True:
+        sleep_until_next_boundary(PING_INTERVAL_SEC)
         do_ping_check()
-        time.sleep(PING_INTERVAL_SEC)
 
 
 def speedtest_loop():
     # Run one immediately on startup so the dashboard isn't empty.
     do_speedtest()
+    interval_sec = SPEEDTEST_INTERVAL_MIN * 60
     while True:
-        time.sleep(SPEEDTEST_INTERVAL_MIN * 60)
+        sleep_until_next_boundary(interval_sec)
         do_speedtest()
 
 
