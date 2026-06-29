@@ -3,8 +3,8 @@
 A self-hosted dashboard that runs real speedtests on a schedule, pings
 continuously to track uptime, and shows the history as graphs you can
 actually reflect on — not just a live number that resets every refresh.
-<img width="927" height="1316" alt="Screenshot_20260628_190536" src="https://github.com/user-attachments/assets/0dcd49fb-3407-4430-8b3a-c32bf64d42d3" />
 
+<img width="871" height="1348" alt="Screenshot_20260629_211352" src="https://github.com/user-attachments/assets/76d454ef-03e8-46aa-a10f-a79d98ae5e19" />
 
 - **Full speedtest** (download/upload/ping) on a timer — every 30 min by default
 - **Lightweight ping check** every 60s for fine-grained uptime tracking
