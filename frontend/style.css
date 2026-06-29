@@ -403,8 +403,7 @@ body {
 
 .heatmap-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  margin-bottom: 4px; /* Space between 6-hour lines */
 }
 
 .heatmap-row__label {
@@ -418,18 +417,14 @@ body {
 }
 
 .heatmap-row__cells {
-  flex: 1 1 auto;
   display: flex;
-  flex-wrap: nowrap;
-  gap: 3px;
+  gap: 2px; /* Small gap between dots */
 }
 
 .heatmap-cell {
-  width: 11px;
-  height: 11px;
-  border-radius: 2px;
-  background: var(--border);
-  flex: 0 0 auto;
+  width: 8px;  /* Small size to fit 60 in a row */
+  height: 8px;
+  border-radius: 1px;
 }
 
 .heatmap-cell--up { background: var(--up-green); }
