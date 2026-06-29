@@ -25,12 +25,13 @@ async function fetchJSON(url, opts) {
 }
 
 // ---------------- Status pill + headline metrics ----------------
+
 async function refreshStatus() {
   try {
     const data = await fetchJSON("/api/status");
-
     const pill = el("statusPill");
     const text = pill.querySelector(".status-text");
+
     pill.classList.remove("status-pill--up", "status-pill--down", "status-pill--loading");
 
     if (data.last_ping) {
@@ -78,6 +79,7 @@ async function refreshStatus() {
 }
 
 // ---------------- Headline uptime numbers ----------------
+
 async function refreshSummary() {
   try {
     const data = await fetchJSON("/api/summary");
@@ -100,6 +102,7 @@ async function refreshSummary() {
 }
 
 // ---------------- Heatmap ----------------
+
 function classifyPing(point) {
   if (!point) return "none";
   if (!point.up) return "down";
@@ -116,6 +119,7 @@ async function refreshHeatmap() {
     heatmap.innerHTML = "";
 
     const points = data.points;
+
     if (points.length === 0) {
       heatmap.innerHTML = `<div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary);">No checks recorded yet — the monitor just started.</div>`;
       return;
@@ -136,124 +140,12 @@ async function refreshHeatmap() {
 
 // ---------------- SVG line chart helper ----------------
 
-// Candidate tick spacings, in milliseconds, ordered smallest to largest.
-// We pick the smallest one that still gives a reasonable number of ticks
-// across the visible time span, so dense/short ranges get hourly ticks
-// and long ranges fall back to daily ticks instead of being unreadable.
-const TICK_STEPS_MS = [
-  5 * 60 * 1000,            // 5 min
-  15 * 60 * 1000,           // 15 min
-  30 * 60 * 1000,           // 30 min
-  60 * 60 * 1000,           // 1 hour
-  2 * 60 * 60 * 1000,       // 2 hours
-  3 * 60 * 60 * 1000,       // 3 hours
-  6 * 60 * 60 * 1000,       // 6 hours
-  12 * 60 * 60 * 1000,      // 12 hours
-  24 * 60 * 60 * 1000,      // 1 day
-  2 * 24 * 60 * 60 * 1000,  // 2 days
-  7 * 24 * 60 * 60 * 1000,  // 1 week
-];
-
-const MS_PER_HOUR = 60 * 60 * 1000;
-const MS_PER_DAY = 24 * MS_PER_HOUR;
-
-// Pick a tick step that yields roughly `targetTicks` ticks (aiming for
-// 5-8) across the given span, then snap tick positions to "nice"
-// boundaries (on the hour, every N hours, or midnight) so labels read
-// like a real clock/calendar instead of arbitrary offsets.
-function pickTickStepMs(spanMs, targetTicks = 6) {
-  for (const step of TICK_STEPS_MS) {
-    if (spanMs / step <= targetTicks * 1.8) return step;
-  }
-  return TICK_STEPS_MS[TICK_STEPS_MS.length - 1];
-}
-
-function snapToStep(date, stepMs) {
-  const t = date.getTime();
-  if (stepMs >= MS_PER_DAY) {
-    // snap to local midnight boundaries
-    const d = new Date(t);
-    d.setHours(0, 0, 0, 0);
-    const days = Math.ceil((t - d.getTime()) / MS_PER_DAY);
-    d.setDate(d.getDate() + days);
-    return d.getTime();
-  }
-  // snap to the next clean boundary of stepMs, anchored to local midnight
-  // (so e.g. 2-hour ticks land on 00:00, 02:00, 04:00 ... not 00:37, 02:37)
-  const dayStart = new Date(t);
-  dayStart.setHours(0, 0, 0, 0);
-  const offset = t - dayStart.getTime();
-  const snapped = Math.ceil(offset / stepMs) * stepMs;
-  return dayStart.getTime() + snapped;
-}
-
-function formatTickLabel(ts, stepMs, spanMs) {
-  const date = new Date(ts);
-  if (stepMs >= MS_PER_DAY) {
-    // day-granularity ticks: show the date
-    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  }
-  // hour-granularity ticks: show the time, plus the date when the
-  // visible span crosses multiple days (so labels stay unambiguous)
-  const timeStr = date.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  if (spanMs > MS_PER_DAY) {
-    const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return `${dateStr} ${timeStr}`;
-  }
-  return timeStr;
-}
-
-// Average of a series' non-null values.
-function seriesAverage(points) {
-  const vals = points.map((p) => p.value).filter((v) => v !== null && !Number.isNaN(v));
-  if (vals.length === 0) return null;
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
-}
-
-// Pick all points whose value deviates meaningfully from `avg`, ranked by
-// deviation, enforcing a minimum pixel spacing between picks so labels
-// never crowd into an unreadable blob. No fixed count — a chart with one
-// clear isolated spike gets one label, a chart with several well-separated
-// spikes gets several, and a tight jagged cluster only yields its single
-// most extreme point since its neighbors all fall within the spacing zone.
-function findStandoutPoints(coordsWithValue, avg, minSpacingPx) {
-  if (avg === null) return [];
-  const values = coordsWithValue.map((c) => c.value).filter((v) => v !== null && !Number.isNaN(v));
-  if (values.length === 0) return [];
-
-  // Noise floor based on how spread out the data actually is, so a flat
-  // baseline never gets labeled just because a few spikes pulled the
-  // average upward (a point close to the bulk of the data is "normal"
-  // even if it's a bit below an average that outliers skewed).
-  const maxAbsDev = Math.max(...values.map((v) => Math.abs(v - avg)));
-  const noiseFloor = Math.max(maxAbsDev * 0.35, avg * 0.05, 1);
-
-  const candidates = coordsWithValue
-    .filter((c) => c.value !== null && !Number.isNaN(c.value))
-    .map((c) => ({ ...c, deviation: Math.abs(c.value - avg) }))
-    .filter((c) => c.deviation >= noiseFloor)
-    .sort((a, b) => b.deviation - a.deviation);
-
-  const picked = [];
-  for (const c of candidates) {
-    const tooClose = picked.some((p) => Math.abs(p.x - c.x) < minSpacingPx);
-    if (tooClose) continue;
-    picked.push(c);
-  }
-  return picked;
-}
-
 function drawLineChart(svg, series, opts) {
-  const { width = 1000, height = 320, padding = { top: 20, right: 16, bottom: 30, left: 50 }, rangeHours = null } = opts;
+  const { width = 1000, height = 320, padding = { top: 20, right: 16, bottom: 30, left: 50 } } = opts;
   svg.innerHTML = "";
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
   const allValues = series.flatMap((s) => s.points.map((p) => p.value)).filter((v) => v !== null && !Number.isNaN(v));
-
   if (allValues.length === 0) {
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", width / 2);
@@ -271,41 +163,11 @@ function drawLineChart(svg, series, opts) {
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
 
-  // The x-axis span is driven by the SELECTED RANGE (e.g. the 24h button),
-  // not by whichever timestamps happen to come back from the API. This
-  // way the chart always shows the full requested window — with a little
-  // padding on both sides — even if the data only fills part of it (e.g.
-  // the monitor hasn't been running that long yet, or there's a gap).
-  // Falls back to data-derived span if no rangeHours is given.
-  const allTs = series.flatMap((s) => s.points.map((p) => new Date(p.ts).getTime()));
-  const dataMinTs = Math.min(...allTs);
-  const dataMaxTs = Math.max(...allTs);
-
-  let minTs, maxTs;
-  if (rangeHours) {
-    const rangeMs = rangeHours * 60 * 60 * 1000;
-    const overheadMs = Math.max(rangeMs * 0.03, 2 * 60 * 1000); // ~3% padding each side, min 2 minutes
-    const now = Date.now();
-    // Anchor the window to "now" looking back rangeHours, but extend to
-    // cover the data too in case a point is (slightly) outside that window.
-    maxTs = Math.max(now, dataMaxTs) + overheadMs;
-    minTs = Math.min(now - rangeMs, dataMinTs) - overheadMs;
-  } else {
-    const span = Math.max(dataMaxTs - dataMinTs, 1);
-    const overheadMs = Math.max(span * 0.03, 60 * 1000);
-    minTs = dataMinTs - overheadMs;
-    maxTs = dataMaxTs + overheadMs;
-  }
-
-  const tsSpan = Math.max(maxTs - minTs, 1);
-  const xForTs = (ts) => padding.left + ((ts - minTs) / tsSpan) * plotW;
-
   // gridlines + y-axis labels
   const gridCount = 4;
   for (let i = 0; i <= gridCount; i++) {
     const y = padding.top + (plotH / gridCount) * i;
     const val = maxVal - (maxVal / gridCount) * i;
-
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
     line.setAttribute("x1", padding.left);
     line.setAttribute("x2", width - padding.right);
@@ -325,49 +187,44 @@ function drawLineChart(svg, series, opts) {
     svg.appendChild(label);
   }
 
-  // x-axis time ticks: real, evenly-spaced-in-time gridlines snapped to
-  // clean hour/day boundaries, labeled with actual local time/date.
-  const stepMs = pickTickStepMs(tsSpan);
-  let tickTs = snapToStep(new Date(minTs), stepMs);
-  const ticks = [];
-  while (tickTs <= maxTs) {
-    ticks.push(tickTs);
-    tickTs += stepMs;
-  }
-
-  for (const t of ticks) {
-    const x = xForTs(t);
-    const tickLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    tickLine.setAttribute("x1", x.toFixed(2));
-    tickLine.setAttribute("x2", x.toFixed(2));
-    tickLine.setAttribute("y1", padding.top);
-    tickLine.setAttribute("y2", height - padding.bottom);
-    tickLine.setAttribute("stroke", "var(--border)");
-    tickLine.setAttribute("stroke-width", "1");
-    tickLine.setAttribute("opacity", "0.5");
-    svg.appendChild(tickLine);
-
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("x", x.toFixed(2));
-    label.setAttribute("y", height - 8);
-    label.setAttribute("text-anchor", "middle");
-    label.setAttribute("font-size", "11");
-    label.setAttribute("fill", "var(--text-tertiary)");
-    label.textContent = formatTickLabel(t, stepMs, tsSpan);
-    svg.appendChild(label);
+  // x-axis time labels (first, middle, last)
+  for (const s of series) {
+    if (s.points.length === 0) continue;
+    const n = s.points.length;
+    const idxs = n > 1 ? [0, Math.floor(n / 2), n - 1] : [0];
+    for (const idx of idxs) {
+      const p = s.points[idx];
+      const x = padding.left + (plotW / Math.max(n - 1, 1)) * idx;
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", x);
+      label.setAttribute("y", height - 8);
+      label.setAttribute("text-anchor", idx === 0 ? "start" : idx === n - 1 ? "end" : "middle");
+      label.setAttribute("font-size", "11");
+      label.setAttribute("fill", "var(--text-tertiary)");
+      label.textContent = new Date(p.ts).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      svg.appendChild(label);
+    }
+    break; // labels based on first series' timeline only
   }
 
   for (const s of series) {
+    const pts = s.points.filter((p) => p.value !== null && !Number.isNaN(p.value));
+    if (pts.length === 0) continue;
     const n = s.points.length;
-    if (n === 0) continue;
 
-    const coords = s.points.map((p) => {
-      const x = xForTs(new Date(p.ts).getTime());
+    const coords = s.points.map((p, idx) => {
+      const x = padding.left + (plotW / Math.max(n - 1, 1)) * idx;
       const y =
         p.value === null || Number.isNaN(p.value)
           ? null
           : padding.top + plotH - ((p.value - minVal) / (maxVal - minVal)) * plotH;
-      return { x, y, value: p.value };
+      return { x, y };
     });
 
     // Build path, breaking on nulls (gaps = downtime / missing data)
@@ -402,40 +259,6 @@ function drawLineChart(svg, series, opts) {
       dot.setAttribute("opacity", "0.85");
       svg.appendChild(dot);
     }
-
-    // Average value label, left side of the chart, stacked per series
-    // so multiple lines (e.g. Download/Upload) don't overlap.
-    const avg = seriesAverage(s.points);
-    if (avg !== null) {
-      const avgY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
-      const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      avgLabel.setAttribute("x", padding.left + 6);
-      avgLabel.setAttribute("y", Math.max(padding.top + 10, Math.min(avgY - 4, height - padding.bottom - 4)));
-      avgLabel.setAttribute("font-size", "10");
-      avgLabel.setAttribute("font-weight", "600");
-      avgLabel.setAttribute("fill", s.color);
-      avgLabel.textContent = `avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
-      svg.appendChild(avgLabel);
-    }
-
-    // Standout point labels: values deviating most from average (covers
-    // both spikes above and dips below). No fixed count — labels are kept
-    // as long as there's enough room between them to stay readable; a
-    // tight jagged cluster collapses down to its single most extreme
-    // point since closely-spaced candidates fall inside the spacing zone.
-    const standouts = findStandoutPoints(coords, avg, plotW * 0.09);
-    for (const c of standouts) {
-      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      const isPeak = avg !== null && c.value > avg;
-      label.setAttribute("x", c.x.toFixed(2));
-      label.setAttribute("y", isPeak ? (c.y - 8).toFixed(2) : (c.y + 14).toFixed(2));
-      label.setAttribute("text-anchor", "middle");
-      label.setAttribute("font-size", "10");
-      label.setAttribute("font-weight", "600");
-      label.setAttribute("fill", s.color);
-      label.textContent = c.value < 10 ? c.value.toFixed(1) : Math.round(c.value);
-      svg.appendChild(label);
-    }
   }
 
   // legend
@@ -463,14 +286,14 @@ function drawLineChart(svg, series, opts) {
 }
 
 // ---------------- Speed history chart ----------------
-let currentSpeedHours = 24;
+
+let currentSpeedHours = 168;
 let currentLatHours = 24;
 
 async function refreshSpeedChart() {
   try {
     const data = await fetchJSON(`/api/speedhistory?hours=${currentSpeedHours}`);
     const svg = el("speedChart");
-
     const downloadSeries = {
       label: "Download",
       color: "var(--signal-blue)".trim(),
@@ -483,8 +306,7 @@ async function refreshSpeedChart() {
     };
     // resolve CSS var manually since SVG attrs don't resolve var() reliably across all contexts
     downloadSeries.color = "#5B9DFF";
-
-    drawLineChart(svg, [downloadSeries, uploadSeries], { height: 320, rangeHours: currentSpeedHours });
+    drawLineChart(svg, [downloadSeries, uploadSeries], { height: 320 });
   } catch (e) {
     console.error("speed chart refresh failed", e);
   }
@@ -499,13 +321,14 @@ async function refreshLatencyChart() {
       color: "#F0A23A",
       points: data.points.map((p) => ({ ts: p.ts, value: p.up ? p.latency_ms : null })),
     };
-    drawLineChart(svg, [series], { height: 240, rangeHours: currentLatHours });
+    drawLineChart(svg, [series], { height: 240 });
   } catch (e) {
     console.error("latency chart refresh failed", e);
   }
 }
 
 // ---------------- Range toggles ----------------
+
 function setupRangeToggle(containerId, onSelect) {
   const container = el(containerId);
   container.addEventListener("click", (e) => {
@@ -528,6 +351,7 @@ setupRangeToggle("latRangeToggle", (hours) => {
 });
 
 // ---------------- Run speedtest now ----------------
+
 el("runNowBtn").addEventListener("click", async () => {
   const btn = el("runNowBtn");
   const icon = btn.querySelector(".btn-run__icon");
@@ -537,6 +361,7 @@ el("runNowBtn").addEventListener("click", async () => {
 
   try {
     const resp = await fetchJSON("/api/run-speedtest-now", { method: "POST" });
+
     if (!resp.started) {
       btn.lastChild.textContent = " Already running…";
       setTimeout(() => {
@@ -568,6 +393,7 @@ el("runNowBtn").addEventListener("click", async () => {
 });
 
 // ---------------- Init ----------------
+
 function refreshAll() {
   refreshStatus();
   refreshSummary();
