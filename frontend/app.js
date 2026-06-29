@@ -145,94 +145,32 @@ function maxCellsPerLine(availablePx) {
 
 async function refreshHeatmap() {
   try {
-    // Server now buckets large ranges down to ~700 points itself, so we
-    // just ask for the window and render whatever comes back.
-    const data = await fetchJSON("/api/uptime?hours=168&max_points=700");
+    // Request data without max_points so we can control grouping in JS
+    const data = await fetchJSON("/api/uptime?hours=168"); 
     const heatmap = el("heatmap");
     heatmap.innerHTML = "";
 
+    const DOTS_PER_LINE = 60; // Represents 6 hours (60 * 6 minutes)
     const points = data.points;
-    if (points.length === 0) {
-      heatmap.innerHTML = `<div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary);">No checks recorded yet — the monitor just started.</div>`;
-      return;
-    }
 
-    // Group points into one bucket per calendar day, oldest day first, so
-    // each day renders as its own labeled section instead of one long
-    // strip that wraps wherever the browser happens to run out of
-    // horizontal space (which made row boundaries meaningless before).
-    const byDay = new Map();
-    for (const p of points) {
-      const key = dayKey(p.ts);
-      if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key).push(p);
-    }
-    const dayKeys = Array.from(byDay.keys()).sort((a, b) => a - b);
+    // Slice points into chunks of 60
+    for (let i = 0; i < points.length; i += DOTS_PER_LINE) {
+      const row = document.createElement("div");
+      row.className = "heatmap-row";
 
-    // Figure out how many cells actually fit on one line right now, based
-    // on the real rendered width of the heatmap container (not a guessed
-    // panel width), so this keeps working if the layout or screen size
-    // changes. Measuring the container directly — rather than an empty
-    // probe element — avoids a flexbox quirk where a flex child with no
-    // content yet can report a width of 0 even though space is available.
-    const heatmapWidth = heatmap.getBoundingClientRect().width;
-    const availablePx = heatmapWidth - HEATMAP_LABEL_WIDTH_PX - HEATMAP_ROW_GAP_PX;
-    const cellsPerLine = maxCellsPerLine(availablePx > 0 ? availablePx : 300);
-
-    for (const key of dayKeys) {
-      const dayPoints = byDay.get(key);
-
-      const dayBlock = document.createElement("div");
-      dayBlock.className = "heatmap-day";
-
-      // Pick the largest sub-row chunk (fewest rows) whose resulting row
-      // width still fits on one line. Falls back to splitting by however
-      // many cells actually fit if even a 4h chunk would overflow (e.g. a
-      // very narrow screen or unusually dense bucketing).
-      let chunks = null;
-      for (const hoursPerChunk of HEATMAP_SUBROW_HOURS) {
-        const candidate = splitByHourBoundary(dayPoints, key, hoursPerChunk);
-        const widestChunk = Math.max(...candidate.map((c) => c.length));
-        if (widestChunk <= cellsPerLine) {
-          chunks = candidate;
-          break;
-        }
-      }
-      if (chunks === null) {
-        chunks = [];
-        for (let i = 0; i < dayPoints.length; i += cellsPerLine) {
-          chunks.push(dayPoints.slice(i, i + cellsPerLine));
-        }
-      }
-
-      let firstSubRow = true;
-      for (const chunk of chunks) {
-        if (chunk.length === 0) continue;
-
-        const row = document.createElement("div");
-        row.className = "heatmap-row";
-
-        const label = document.createElement("div");
-        label.className = "heatmap-row__label";
-        label.textContent = firstSubRow ? dayLabel(key) : "";
-        row.appendChild(label);
-        firstSubRow = false;
-
-        const cellsWrap = document.createElement("div");
-        cellsWrap.className = "heatmap-row__cells";
-        for (const p of chunk) {
-          const cls = classifyPing(p);
-          const cell = document.createElement("div");
-          cell.className = `heatmap-cell heatmap-cell--${cls}`;
-          const countNote = p.bucket_size > 1 ? ` (${p.bucket_size} checks)` : "";
-          cell.title = `${new Date(p.ts).toLocaleString(undefined, { hour12: false })} — ${cls}${countNote}`;
-          cellsWrap.appendChild(cell);
-        }
-        row.appendChild(cellsWrap);
-        dayBlock.appendChild(row);
-      }
-
-      heatmap.appendChild(dayBlock);
+      const cellsWrap = document.createElement("div");
+      cellsWrap.className = "heatmap-row__cells";
+      
+      const chunk = points.slice(i, i + DOTS_PER_LINE);
+      chunk.forEach(p => {
+        const cls = classifyPing(p);
+        const cell = document.createElement("div");
+        cell.className = `heatmap-cell heatmap-cell--${cls}`;
+        cellsWrap.appendChild(cell);
+      });
+      
+      row.appendChild(cellsWrap);
+      heatmap.appendChild(row);
     }
   } catch (e) {
     console.error("heatmap refresh failed", e);
