@@ -457,12 +457,10 @@ function drawLineChart(svg, series, opts) {
       if (onRight) {
         // Right side: anchor to the right edge, inside the plot
         avgLabel.setAttribute("x", (padding.left - 9).toFixed(2));
-        avgLabel.setAttribute("y", (padding.down + 10).toFixed(2));
         avgLabel.setAttribute("text-anchor", "end");
       } else {
-        // Left side: sit just outside the left Y-axis
+         // Right side: anchor to the right edge, inside the plot
         avgLabel.setAttribute("x", (padding.left - 9).toFixed(2));
-        avgLabel.setAttribute("y", (padding.up - 10).toFixed(2));
         avgLabel.setAttribute("text-anchor", "end");
       }
       avgLabel.setAttribute("y", (clampedY + 4).toFixed(2));
