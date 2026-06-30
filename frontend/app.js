@@ -442,7 +442,13 @@ function drawLineChart(svg, series, opts) {
     label.textContent = formatTickLabel(t, stepMs, tsSpan);
     svg.appendChild(label);
   }
+
+  // Average value labels are stacked in a fixed block at the top-left of
+  // the plot area (one row per series, in series order) so they never
+  // collide with the line itself, regardless of where the line's actual
+  // average happens to sit vertically on a given day's data.
   let avgLabelRow = 0;
+
   for (const s of series) {
     const n = s.points.length;
     if (n === 0) continue;
@@ -489,10 +495,10 @@ function drawLineChart(svg, series, opts) {
       svg.appendChild(dot);
     }
 
-    // Average value label, stacked in a fixed block at the top-left of
-    // the plot area (one row per series) so it never collides with the
-    // line itself, regardless of where the line's average happens to
-    // sit vertically.
+    // Average value label, stacked in a fixed top-left block (one row
+    // per series) instead of floating at the line's y-coordinate — this
+    // keeps "avg 248" / "avg 247" lined up neatly regardless of where
+    // the line itself happens to sit on a given day.
     const avg = seriesAverage(s.points);
     if (avg !== null) {
       const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
