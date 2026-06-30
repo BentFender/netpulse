@@ -18,7 +18,7 @@ actually reflect on — not just a live number that resets every refresh.
 
 ---
 
-## Deploying on ZimaOS
+## Deploying on ZimaOS (Installation)
 
 The image is pre-built and published to GHCR by this repo's GitHub Actions
 workflow — `ghcr.io/bentfender/netpulse:latest`. ZimaOS just pulls it, no
