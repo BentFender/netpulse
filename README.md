@@ -52,7 +52,7 @@ local build step needed.
      port_map: "8077"
      author: self
      category: self
-     icon: "https://raw.githubusercontent.com/BentFender/netpulse/main/netpulse_icon.png"
+     icon: "https://raw.githubusercontent.com/BentFender/netpulse/main/netpulse_icon.svg"
      title:
        custom: "netpulse"
    ```
