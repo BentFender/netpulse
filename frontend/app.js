@@ -523,7 +523,8 @@ function drawLineChart(svg, series, opts) {
     const meta = avgMeta[series.indexOf(s)];
     if (meta !== null) {
       const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      avgLabel.setAttribute("x", padding.left + 6);
+      avgLabel.setAttribute("x", padding.left - 9);
+      avgLabel.setAttribute("text-anchor", "end");
       avgLabel.setAttribute("y", meta.labelY.toFixed(2));
       avgLabel.setAttribute("font-size", "10");
       avgLabel.setAttribute("font-weight", "600");
