@@ -14,22 +14,22 @@ actually reflect on — not just a live number that resets every refresh.
 - All data lives in a local SQLite file, so history survives container restarts
 - "Run speedtest now" button for an on-demand check
 ---
-*All coding work made by free access ClaudeAI because I have no coding experience just needed a tool. Testing done on my home server with help of ClaudeAI
+*All coding work made by free access ClaudeAI because I have no coding experience just needed a tool. Testing done on my home ZimaOS server and work UbuntuPi server with CasaOS overlay with help of ClaudeAI.
 
 ---
 
-## Deploying on ZimaOS (Installation)
+## Deploying on ZimaOS or CasaOS (Installation)
 
 The image is pre-built and published to GHCR by this repo's GitHub Actions
-workflow — `ghcr.io/bentfender/netpulse:latest`. ZimaOS just pulls it, no
+workflow — `ghcr.io/bentfender/netpulse:latest`. ZimaOS or CasaOS just pulls it, no
 local build step needed.
 
-### Option A — ZimaOS App Store / Compose UI (recommended)
+### Option A — ZimaOS/CasaOS App Store / Compose UI (recommended)
 
-1. In ZimaOS, choose **Install a customized app** - The **+** simbol on Apps dashboard.
+1. In ZimaOS/CasaOS, choose **Install a customized app** - The **+** simbol on Apps dashboard.
    **Import** — a button with arrow in the top-right corner of the popup settings window.
 2. Paste the following into the compose field, **replacing the hostname**
-   `192.168.50.227` with your own ZimaOS server's IP address:
+   `192.168.50.227` with your own ZimaOS/CasaOS server's IP address:
 
    ```yaml
    services:
@@ -59,10 +59,10 @@ local build step needed.
 
 3. Click **Submit** / **Install**. It pulls the image (no build), so this
    should take seconds, not minutes.
-4. Open directly from **ZimaOS dashboard** or `http://<your-zimaos-ip>:8077` in a browser.
+4. Open directly from **ZimaOS/CasaOS dashboard** or `http://<your-zimaos-ip>:8077` in a browser.
 
 `network_mode: host` is the most reliable option for accurate ping/speedtest
-results and needs no port mapping. If your ZimaOS setup doesn't like host
+results and needs no port mapping. If your ZimaOS/CasaOS setup doesn't like host
 networking (some app-store UIs prefer explicit ports), use the bridge-mode
 version instead:
 
