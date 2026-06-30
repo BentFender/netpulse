@@ -113,6 +113,7 @@ function classifyPing(point) {
 }
 
 function dayKeyLocal(date) {
+  // Calendar-day key in the viewer's local timezone, e.g. "2026-06-29".
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
@@ -120,9 +121,24 @@ function dayLabel(date) {
   return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
+/**
+ * Group bucketed ping points into one entry per local calendar day, each
+ * holding exactly CELLS_PER_DAY cells.
+ *
+ * Each point is placed into the slot matching its actual time-of-day
+ * (msIntoDay / 5min), not just appended in arrival order. This matters
+ * because the API's bucketing only returns buckets that have data — if
+ * tracking started mid-day (the very first day) or "today" hasn't
+ * finished yet, the missing hours need their "no data" gap to land at
+ * the correct chronological position (e.g. the morning before tracking
+ * began), not wherever the array happened to run out.
+ *
+ * Returns an array ordered oldest day -> newest day; today (if present)
+ * is always last.
+ */
 function groupPointsByDay(points) {
-  const byDay = new Map();
-  const cellMs = (24 * 60 * 60 * 1000) / CELLS_PER_DAY;
+  const byDay = new Map(); // dayKey -> { date, slots: Array(CELLS_PER_DAY) }
+  const cellMs = (24 * 60 * 60 * 1000) / CELLS_PER_DAY; // 5 min, derived so it always matches CELLS_PER_DAY
 
   for (const p of points) {
     const d = new Date(p.ts);
@@ -135,7 +151,7 @@ function groupPointsByDay(points) {
     const entry = byDay.get(key);
     const msIntoDay = d.getTime() - entry.date.getTime();
     let slotIdx = Math.floor(msIntoDay / cellMs);
-    slotIdx = Math.max(0, Math.min(CELLS_PER_DAY - 1, slotIdx));
+    slotIdx = Math.max(0, Math.min(CELLS_PER_DAY - 1, slotIdx)); // clamp against DST/clock edge cases
     entry.slots[slotIdx] = p;
   }
 
@@ -146,6 +162,10 @@ function groupPointsByDay(points) {
 
 async function refreshHeatmap() {
   try {
+    // Request exactly enough points for HEATMAP_DAYS full days at
+    // CELLS_PER_DAY resolution (7 * 288 = 2016), so the server's
+    // bucketing divides evenly per day instead of leaving an
+    // arbitrary, width-dependent number of cells per row.
     const totalPoints = HEATMAP_DAYS * CELLS_PER_DAY;
     const data = await fetchJSON(`/api/uptime?hours=${HEATMAP_DAYS * 24}&max_points=${totalPoints}`);
     const heatmap = el("heatmap");
@@ -188,6 +208,10 @@ async function refreshHeatmap() {
       heatmap.appendChild(dayGroup);
     }
 
+    // Default scroll position: show the most recent HEATMAP_VISIBLE_DAYS
+    // days (i.e. start scrolled to the bottom of the list), since that's
+    // the most relevant data and matches "oldest to newest, top to
+    // bottom" reading order from the panel hint.
     requestAnimationFrame(() => {
       heatmap.scrollTop = heatmap.scrollHeight;
     });
@@ -198,23 +222,31 @@ async function refreshHeatmap() {
 
 // ---------------- SVG line chart helper ----------------
 
+// Candidate tick spacings, in milliseconds, ordered smallest to largest.
+// We pick the smallest one that still gives a reasonable number of ticks
+// across the visible time span, so dense/short ranges get hourly ticks
+// and long ranges fall back to daily ticks instead of being unreadable.
 const TICK_STEPS_MS = [
-  5 * 60 * 1000,
-  15 * 60 * 1000,
-  30 * 60 * 1000,
-  60 * 60 * 1000,
-  2 * 60 * 60 * 1000,
-  3 * 60 * 60 * 1000,
-  6 * 60 * 60 * 1000,
-  12 * 60 * 60 * 1000,
-  24 * 60 * 60 * 1000,
-  2 * 24 * 60 * 60 * 1000,
-  7 * 24 * 60 * 60 * 1000,
+  5 * 60 * 1000,            // 5 min
+  15 * 60 * 1000,           // 15 min
+  30 * 60 * 1000,           // 30 min
+  60 * 60 * 1000,           // 1 hour
+  2 * 60 * 60 * 1000,       // 2 hours
+  3 * 60 * 60 * 1000,       // 3 hours
+  6 * 60 * 60 * 1000,       // 6 hours
+  12 * 60 * 60 * 1000,      // 12 hours
+  24 * 60 * 60 * 1000,      // 1 day
+  2 * 24 * 60 * 60 * 1000,  // 2 days
+  7 * 24 * 60 * 60 * 1000,  // 1 week
 ];
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
+// Pick a tick step that yields roughly `targetTicks` ticks (aiming for
+// 5-8) across the given span, then snap tick positions to "nice"
+// boundaries (on the hour, every N hours, or midnight) so labels read
+// like a real clock/calendar instead of arbitrary offsets.
 function pickTickStepMs(spanMs, targetTicks = 6) {
   for (const step of TICK_STEPS_MS) {
     if (spanMs / step <= targetTicks * 1.8) return step;
@@ -225,12 +257,15 @@ function pickTickStepMs(spanMs, targetTicks = 6) {
 function snapToStep(date, stepMs) {
   const t = date.getTime();
   if (stepMs >= MS_PER_DAY) {
+    // snap to local midnight boundaries
     const d = new Date(t);
     d.setHours(0, 0, 0, 0);
     const days = Math.ceil((t - d.getTime()) / MS_PER_DAY);
     d.setDate(d.getDate() + days);
     return d.getTime();
   }
+  // snap to the next clean boundary of stepMs, anchored to local midnight
+  // (so e.g. 2-hour ticks land on 00:00, 02:00, 04:00 ... not 00:37, 02:37)
   const dayStart = new Date(t);
   dayStart.setHours(0, 0, 0, 0);
   const offset = t - dayStart.getTime();
@@ -241,8 +276,11 @@ function snapToStep(date, stepMs) {
 function formatTickLabel(ts, stepMs, spanMs) {
   const date = new Date(ts);
   if (stepMs >= MS_PER_DAY) {
+    // day-granularity ticks: show the date
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
+  // hour-granularity ticks: show the time, plus the date when the
+  // visible span crosses multiple days (so labels stay unambiguous)
   const timeStr = date.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
@@ -255,17 +293,28 @@ function formatTickLabel(ts, stepMs, spanMs) {
   return timeStr;
 }
 
+// Average of a series' non-null values.
 function seriesAverage(points) {
   const vals = points.map((p) => p.value).filter((v) => v !== null && !Number.isNaN(v));
   if (vals.length === 0) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
+// Pick all points whose value deviates meaningfully from `avg`, ranked by
+// deviation, enforcing a minimum pixel spacing between picks so labels
+// never crowd into an unreadable blob. No fixed count — a chart with one
+// clear isolated spike gets one label, a chart with several well-separated
+// spikes gets several, and a tight jagged cluster only yields its single
+// most extreme point since its neighbors all fall within the spacing zone.
 function findStandoutPoints(coordsWithValue, avg, minSpacingPx) {
   if (avg === null) return [];
   const values = coordsWithValue.map((c) => c.value).filter((v) => v !== null && !Number.isNaN(v));
   if (values.length === 0) return [];
 
+  // Noise floor based on how spread out the data actually is, so a flat
+  // baseline never gets labeled just because a few spikes pulled the
+  // average upward (a point close to the bulk of the data is "normal"
+  // even if it's a bit below an average that outliers skewed).
   const maxAbsDev = Math.max(...values.map((v) => Math.abs(v - avg)));
   const noiseFloor = Math.max(maxAbsDev * 0.35, avg * 0.05, 1);
 
@@ -308,6 +357,12 @@ function drawLineChart(svg, series, opts) {
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
 
+  // The x-axis span is driven by the SELECTED RANGE (e.g. the 24h button),
+  // not by whichever timestamps happen to come back from the API. This
+  // way the chart always shows the full requested window — with a little
+  // padding on both sides — even if the data only fills part of it (e.g.
+  // the monitor hasn't been running that long yet, or there's a gap).
+  // Falls back to data-derived span if no rangeHours is given.
   const allTs = series.flatMap((s) => s.points.map((p) => new Date(p.ts).getTime()));
   const dataMinTs = Math.min(...allTs);
   const dataMaxTs = Math.max(...allTs);
@@ -315,8 +370,10 @@ function drawLineChart(svg, series, opts) {
   let minTs, maxTs;
   if (rangeHours) {
     const rangeMs = rangeHours * 60 * 60 * 1000;
-    const overheadMs = Math.max(rangeMs * 0.03, 2 * 60 * 1000);
+    const overheadMs = Math.max(rangeMs * 0.03, 2 * 60 * 1000); // ~3% padding each side, min 2 minutes
     const now = Date.now();
+    // Anchor the window to "now" looking back rangeHours, but extend to
+    // cover the data too in case a point is (slightly) outside that window.
     maxTs = Math.max(now, dataMaxTs) + overheadMs;
     minTs = Math.min(now - rangeMs, dataMinTs) - overheadMs;
   } else {
@@ -354,7 +411,8 @@ function drawLineChart(svg, series, opts) {
     svg.appendChild(label);
   }
 
-  // x-axis time ticks
+  // x-axis time ticks: real, evenly-spaced-in-time gridlines snapped to
+  // clean hour/day boundaries, labeled with actual local time/date.
   const stepMs = pickTickStepMs(tsSpan);
   let tickTs = snapToStep(new Date(minTs), stepMs);
   const ticks = [];
@@ -383,6 +441,34 @@ function drawLineChart(svg, series, opts) {
     label.setAttribute("fill", "var(--text-tertiary)");
     label.textContent = formatTickLabel(t, stepMs, tsSpan);
     svg.appendChild(label);
+  }
+
+  // Pre-compute each series' true avg Y position, then nudge any pair of
+  // labels that would overlap apart — keeping each as close as possible
+  // to its actual average height. This runs before the series loop so
+  // all positions are settled before any label is drawn.
+  const MIN_AVG_GAP = 13; // px minimum between label baselines
+  const avgMeta = series.map((s) => {
+    const avg = seriesAverage(s.points);
+    if (avg === null) return null;
+    const rawY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
+    return { avg, labelY: rawY };
+  });
+  // Sort by rawY top-to-bottom, push overlapping pairs apart downward
+  const sortedIdx = avgMeta
+    .map((m, i) => ({ m, i }))
+    .filter(({ m }) => m !== null)
+    .sort((a, b) => a.m.labelY - b.m.labelY);
+  for (let k = 1; k < sortedIdx.length; k++) {
+    const prev = sortedIdx[k - 1].m;
+    const cur  = sortedIdx[k].m;
+    if (cur.labelY - prev.labelY < MIN_AVG_GAP) {
+      cur.labelY = prev.labelY + MIN_AVG_GAP;
+    }
+  }
+  // Clamp all within plot bounds after spacing adjustments
+  for (const { m } of sortedIdx) {
+    m.labelY = Math.max(padding.top + 6, Math.min(m.labelY, height - padding.bottom - 4));
   }
 
   for (const s of series) {
@@ -431,52 +517,31 @@ function drawLineChart(svg, series, opts) {
       svg.appendChild(dot);
     }
 
-    // Average value: dashed reference line across the chart + label.
-    // First series (index 0, e.g. Download) → label on the LEFT Y-axis.
-    // Second+ series (index 1+, e.g. Upload) → label on the RIGHT edge.
-    // Single-series charts (Latency) always use the left.
-    const avg = seriesAverage(s.points);
-    if (avg !== null) {
-      const avgY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
-      const clampedY = Math.max(padding.top + 6, Math.min(avgY, height - padding.bottom - 4));
-
-      // Dashed reference line at true avg height
-      const avgLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      avgLine.setAttribute("x1", padding.left);
-      avgLine.setAttribute("x2", width - padding.right);
-      avgLine.setAttribute("y1", avgY.toFixed(2));
-      avgLine.setAttribute("y2", avgY.toFixed(2));
-      avgLine.setAttribute("stroke", s.color);
-      avgLine.setAttribute("stroke-width", "1");
-      avgLine.setAttribute("stroke-dasharray", "4 3");
-      avgLine.setAttribute("opacity", "0.35");
-      svg.appendChild(avgLine);
-
+    // Average value label — positioned at the nudged labelY from avgMeta
+    // so Download/Upload labels sit as close as possible to their true
+    // average height while never touching each other.
+    const meta = avgMeta[series.indexOf(s)];
+    if (meta !== null) {
       const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      const onRight = series.indexOf(s) > 0;
-      if (onRight) {
-        // Right side: anchor to the right edge, inside the plot
-        avgLabel.setAttribute("x", (padding.left - 9).toFixed(2));
-        avgLabel.setAttribute("text-anchor", "end");
-      } else {
-         // Right side: anchor to the right edge, inside the plot
-        avgLabel.setAttribute("x", (padding.left - 9).toFixed(2));
-        avgLabel.setAttribute("text-anchor", "end");
-      }
-      avgLabel.setAttribute("y", (clampedY + 4).toFixed(2));
+      avgLabel.setAttribute("x", padding.left + 6);
+      avgLabel.setAttribute("y", meta.labelY.toFixed(2));
       avgLabel.setAttribute("font-size", "10");
       avgLabel.setAttribute("font-weight", "600");
       avgLabel.setAttribute("fill", s.color);
-      avgLabel.textContent = `avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
+      avgLabel.textContent = `avg ${meta.avg < 10 ? meta.avg.toFixed(1) : Math.round(meta.avg)}`;
       svg.appendChild(avgLabel);
     }
 
-    // Standout point labels
-    const standouts = findStandoutPoints(coords, seriesAverage(s.points), plotW * 0.09);
+    // Standout point labels: values deviating most from average (covers
+    // both spikes above and dips below). No fixed count — labels are kept
+    // as long as there's enough room between them to stay readable; a
+    // tight jagged cluster collapses down to its single most extreme
+    // point since closely-spaced candidates fall inside the spacing zone.
+    const avg = meta ? meta.avg : null;
+    const standouts = findStandoutPoints(coords, avg, plotW * 0.09);
     for (const c of standouts) {
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      const avgForStandout = seriesAverage(s.points);
-      const isPeak = avgForStandout !== null && c.value > avgForStandout;
+      const isPeak = avg !== null && c.value > avg;
       label.setAttribute("x", c.x.toFixed(2));
       label.setAttribute("y", isPeak ? (c.y - 8).toFixed(2) : (c.y + 14).toFixed(2));
       label.setAttribute("text-anchor", "middle");
@@ -597,6 +662,7 @@ el("runNowBtn").addEventListener("click", async () => {
       return;
     }
 
+    // Speedtests take 10-30s; poll status until it updates.
     const startedAt = Date.now();
     const poll = setInterval(async () => {
       await refreshStatus();
