@@ -456,7 +456,7 @@ function drawLineChart(svg, series, opts) {
       const onRight = series.indexOf(s) > 0;
       if (onRight) {
         // Right side: anchor to the right edge, inside the plot
-        avgLabel.setAttribute("x", (width - padding.right + 24).toFixed(2));
+        avgLabel.setAttribute("x", (width - padding.right + 34).toFixed(2));
         avgLabel.setAttribute("text-anchor", "end");
       } else {
         // Left side: sit just outside the left Y-axis
