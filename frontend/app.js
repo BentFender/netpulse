@@ -442,7 +442,7 @@ function drawLineChart(svg, series, opts) {
     label.textContent = formatTickLabel(t, stepMs, tsSpan);
     svg.appendChild(label);
   }
-
+  let avgLabelRow = 0;
   for (const s of series) {
     const n = s.points.length;
     if (n === 0) continue;
@@ -489,19 +489,21 @@ function drawLineChart(svg, series, opts) {
       svg.appendChild(dot);
     }
 
-    // Average value label, left side of the chart, stacked per series
-    // so multiple lines (e.g. Download/Upload) don't overlap.
+    // Average value label, stacked in a fixed block at the top-left of
+    // the plot area (one row per series) so it never collides with the
+    // line itself, regardless of where the line's average happens to
+    // sit vertically.
     const avg = seriesAverage(s.points);
     if (avg !== null) {
-      const avgY = padding.top + plotH - ((avg - minVal) / (maxVal - minVal)) * plotH;
       const avgLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
       avgLabel.setAttribute("x", padding.left + 6);
-      avgLabel.setAttribute("y", Math.max(padding.top + 10, Math.min(avgY - 4, height - padding.bottom - 4)));
+      avgLabel.setAttribute("y", padding.top + 12 + avgLabelRow * 14);
       avgLabel.setAttribute("font-size", "10");
       avgLabel.setAttribute("font-weight", "600");
       avgLabel.setAttribute("fill", s.color);
       avgLabel.textContent = `avg ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}`;
       svg.appendChild(avgLabel);
+      avgLabelRow++;
     }
 
     // Standout point labels: values deviating most from average (covers
