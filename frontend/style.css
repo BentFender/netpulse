@@ -405,14 +405,18 @@ body {
 
 .heatmap-day {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
 }
 
 .heatmap-day__label {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-tertiary);
+  flex-shrink: 0;
+  width: 80px;
+  text-align: right;
 }
 
 .heatmap-day__grid {
