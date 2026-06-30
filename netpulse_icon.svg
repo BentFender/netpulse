@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 680 680">
+  <title>NetPulse app icon</title>
+  <desc>Green top-left to dark teal bottom-right gradient square with white signal bars and heartbeat line</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#2ED47A"/>
+      <stop offset="55%" stop-color="#00BFA8"/>
+      <stop offset="100%" stop-color="#009E8E"/>
+    </linearGradient>
+    <clipPath id="round">
+      <rect width="680" height="680" rx="140"/>
+    </clipPath>
+  </defs>
+
+  <rect width="680" height="680" fill="url(#bg)" rx="140"/>
+
+  <g clip-path="url(#round)">
+    <rect x="112" y="348" width="84" height="158" rx="14" fill="white"/>
+    <rect x="228" y="276" width="84" height="230" rx="14" fill="white"/>
+    <rect x="344" y="190" width="84" height="316" rx="14" fill="white"/>
+
+    <polyline
+      points="386,382 440,382 470,278 502,488 534,330 564,382 622,382"
+      fill="none"
+      stroke="white"
+      stroke-width="28"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <circle cx="622" cy="382" r="22" fill="white"/>
+  </g>
+</svg>
