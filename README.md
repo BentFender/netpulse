@@ -29,7 +29,7 @@ local build step needed.
 
 1. In ZimaOS/CasaOS, choose **Install a customized app** - The **+** simbol on Apps dashboard.
    **Import** — a button with arrow in the top-right corner of the popup settings window.
-2. Paste the following into the compose field, ***replacing the hostname***
+2. Paste the following into the compose field, ****replacing the hostname****
    `192.168.50.227` with your own ZimaOS/CasaOS server's IP address:
 
    ```yaml
