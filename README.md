@@ -58,7 +58,7 @@ local build step needed.
        custom: "netpulse"
    ```
 
-3. Click **Submit** / **Install**. Click **OK** on popup window. It pulls the image (no build), so this
+3. Click **Submit** / **OK** / **Install**. It pulls the image (no build), so this
    should take seconds, not minutes.
 4. Open directly from **ZimaOS/CasaOS dashboard** or `http://<your-zimaos-ip>:8077` in a browser.
 
