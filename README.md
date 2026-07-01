@@ -2,7 +2,7 @@
 
 A self-hosted dashboard that runs real speedtests on a schedule, pings
 continuously to track uptime, and shows the history as graphs you can
-actually reflect on — not just a live number that resets every refresh. **Not something you want to use on metered connection - it uses over 28GB of traffic dayly on default settings!!!**
+actually reflect on — not just a live number that resets every refresh. **Not something you want to use on metered connection - it uses over 28GB of traffic daily on default settings!!!**
 
 <img width="871" height="1348" alt="Screenshot_20260629_211352" src="https://github.com/user-attachments/assets/76d454ef-03e8-46aa-a10f-a79d98ae5e19" />
 
