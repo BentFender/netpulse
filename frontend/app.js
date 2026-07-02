@@ -633,13 +633,10 @@ function setupRangeToggle(containerId, onSelect) {
   });
 }
 
-setupRangeToggle("speedRangeToggle", (hours) => {
+setupRangeToggle("historyRangeToggle", (hours) => {
   currentSpeedHours = hours;
-  refreshSpeedChart();
-});
-
-setupRangeToggle("latRangeToggle", (hours) => {
   currentLatHours = hours;
+  refreshSpeedChart();
   refreshLatencyChart();
 });
 
